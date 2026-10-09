@@ -143,9 +143,16 @@ Environment: Windows + WSL (Ubuntu). Give commands for the WSL shell.
 
 ## 9. Existing and earlier components
 
-The original blueprint planned an EEG simulator (`streamer.py`, LSL), an LSL receiver / band-power detector (`detector.py`), and a contextual-bandit recommendation agent (`agent.py`). **None of these files are in the repository as of this update** — the developer may have local, un-pushed versions. Before changing anything, ask whether they exist locally and inspect them.
+These scripts came from the original blueprint and are now in the repo. Inspect them before changing them, and do not rewrite them without explaining why:
 
-Guidance if they exist:
+| File | What it is today | Maps to |
+| --- | --- | --- |
+| `streamer.py` | Working simulator: 4-channel, 256 Hz LSL stream (`fakeEEG`) of a 10 Hz sine with per-channel amplitude/phase and Gaussian noise. | Optional extension: real-time infrastructure testing (pipeline stage 8) |
+| `detector.py` | Stub (TODO comments only): LSL inlet, FFT alpha/beta power, focus score. | Band-power code may later feed stage 4 (features); the focus score is an optional extension |
+| `agent.py` | Stub (TODO comments only): contextual-bandit activity recommender. | Optional extension; no defined BCI objective yet |
+| `requirements.txt` | `pylsl`, `numpy` (unpinned). | Add MNE/SciPy/scikit-learn when stage 1 starts |
+
+General guidance:
 
 - **EEG simulator / LSL streamer & receiver** — useful for **infrastructure testing only** (stream plumbing, buffering, real-time latency). Simulated EEG cannot establish real-world BCI performance.
 - **Signal-processing code** (FFT, band power) — reusable for feature extraction.
@@ -177,7 +184,9 @@ Any prototype must prioritize **electrical safety, isolation, and suitable acqui
 | Evaluation framework (nested CV) | Planned |
 | Personalized recommendations | Planned |
 | Real-time inference / LSL | Planned (optional) |
-| EEG simulator, detector, bandit agent | Not in repo; may exist locally — unverified |
+| `streamer.py` (LSL EEG simulator) | Implemented, untested (optional extension) |
+| `detector.py` (band power / focus score) | Planned — stub with TODOs only |
+| `agent.py` (contextual bandit) | Planned — stub with TODOs only (optional extension) |
 
 Nothing is **tested** yet. Update this table whenever a component moves to implemented or tested.
 

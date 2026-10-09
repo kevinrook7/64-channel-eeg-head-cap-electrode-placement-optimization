@@ -8,7 +8,19 @@ The first phase is software only: pick channel subsets from public, already-reco
 
 ## Status
 
-Documentation only. No code has been implemented or tested yet. See the status table in [`AGENTS.md`](AGENTS.md#11-status).
+The channel-selection pipeline hasn't been started yet. Existing scripts from the original blueprint:
+
+- `streamer.py`: a working simulated 4-channel EEG stream over LSL (untested). It's an optional extension for testing real-time infrastructure; simulated data can't show real BCI performance.
+- `detector.py`: a stub (TODOs only) for LSL band power and a focus score.
+- `agent.py`: a stub (TODOs only) for a contextual-bandit recommender. It's an optional extension.
+
+See the status table in [`AGENTS.md`](AGENTS.md#11-status).
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python streamer.py   # broadcasts the "fakeEEG" LSL stream until Ctrl+C
+```
 
 ## Docs
 
