@@ -69,6 +69,6 @@ Create `evaluate.py` and prompt:
 
 1. **The "Why" Rule:** Never accept code from Cursor unless you can explain what every single line does. If a block of code looks confusing, highlight it, press Cmd/Ctrl + L (Chat), and ask: "Explain this specific block to me like I am a beginner."
 2. **Break it Intentionally:** Once Cursor writes a piece of code that works, change a number. Shrink the channel set from 16 to 4, or move the band-pass from 8–30 Hz to 1–4 Hz. See how accuracy reacts. Observing how a system breaks teaches you exactly how it functions.
-3. **Use the Interactive Terminal:** Run your scripts manually in the WSL terminal (`python baseline.py`). Watch the print statements scroll by in real-time.
+3. **Use the Interactive Terminal:** Run your scripts manually in the PowerShell terminal (`python baseline.py`). Watch the print statements scroll by in real-time.
 
 Also keep track of what's **implemented**, what's **tested**, and what's only **planned**, in the status table in [`AGENTS.md`](../AGENTS.md#11-status).

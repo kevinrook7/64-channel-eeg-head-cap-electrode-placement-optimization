@@ -2,7 +2,7 @@
 
 Primary guidance for AI coding agents (Cursor, Claude, etc.) working in this repository. `CLAUDE.md`-style tools should treat this file as the source of truth.
 
-The developer is a beginner learning BCI and machine learning on Windows + WSL. **Teaching comes first, code output second.** Read [Learning approach](#8-learning-approach-build-and-deconstruct) before writing any code.
+The developer is a beginner learning BCI and machine learning on Windows (PowerShell). **Teaching comes first, code output second.** Read [Learning approach](#8-learning-approach-build-and-deconstruct) before writing any code.
 
 ---
 
@@ -139,7 +139,7 @@ Full blueprint: [`docs/learning-blueprint.md`](docs/learning-blueprint.md). Agen
 - Never replace working code without explaining why.
 - Clearly distinguish **implemented** vs **tested** vs **planned** (see [§11](#11-status)).
 
-Environment: Windows + WSL (Ubuntu). Give commands for the WSL shell.
+Environment: Windows + PowerShell, Python 3.12 in a `.venv` virtual environment (activate with `.\.venv\Scripts\Activate.ps1`). Give commands for PowerShell.
 
 ## 9. Existing and earlier components
 
@@ -150,7 +150,7 @@ These scripts came from the original blueprint and are now in the repo. Inspect 
 | `streamer.py` | Working simulator: 4-channel, 256 Hz LSL stream (`fakeEEG`) of a 10 Hz sine with per-channel amplitude/phase and Gaussian noise. | Optional extension: real-time infrastructure testing (pipeline stage 8) |
 | `detector.py` | Stub (TODO comments only): LSL inlet, FFT alpha/beta power, focus score. | Band-power code may later feed stage 4 (features); the focus score is an optional extension |
 | `agent.py` | Stub (TODO comments only): contextual-bandit activity recommender. | Optional extension; no defined BCI objective yet |
-| `requirements.txt` | `pylsl`, `numpy` (unpinned). | Add MNE/SciPy/scikit-learn when stage 1 starts |
+| `requirements.txt` | `pylsl`, `numpy`, `mne`, `scikit-learn` (pinned). | scikit-learn added for the full-channel baseline |
 
 General guidance:
 
@@ -177,9 +177,9 @@ Any prototype must prioritize **electrical safety, isolation, and suitable acqui
 | Item | Status |
 | --- | --- |
 | Documentation (this file, README, learning blueprint) | Implemented |
-| Dataset loading (eegmmidb) | Planned |
-| Preprocessing & channel validation | Planned |
-| Full-channel baseline | Planned |
+| Dataset loading (eegmmidb) | Implemented, untested — `load_data.py` loads subject 1, runs 4/8/12, renames T0/T1/T2 per run before concatenating (checked by hand: 23 left / 22 right / 45 rest) |
+| Preprocessing & channel validation | Implemented, untested — `preprocess.py`: `colin27_1005` montage, 8–30 Hz band-pass, robust-z bad-channel check on filtered data (threshold \|z\| > 5; subject 1 flags T10), epochs −0.5 to 4.0 s for left/right → shape (45, 63, 721) |
+| Full-channel baseline | Implemented, untested — `baseline.py`: log band power (0.5–4.0 s) + L2 logistic regression, stratified 5-fold, seed 0. Subject 1, within-session: accuracy 0.533 ± 0.093 vs 0.511 majority-class (24/45 vs 23/45). CSP not started. |
 | Channel subset optimization | Planned |
 | Evaluation framework (nested CV) | Planned |
 | Personalized recommendations | Planned |
