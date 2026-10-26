@@ -14,7 +14,9 @@ Learning-blueprint Phases 1–3 are implemented for subject 1:
 - `preprocess.py`: attaches a montage, band-pass filters 8–30 Hz, flags and removes bad channels, and cuts left/right epochs. `prepare_epochs()` returns those epochs.
 - `baseline.py`: log band power (0.5–4.0 s) and L2 logistic regression, scored with stratified 5-fold cross-validation (seed 0). Subject 1, within-session: accuracy 0.533 ± 0.093 vs 0.511 for always guessing the larger class, so no evidence it beats chance yet. Common spatial patterns (CSP, 6 filters fit inside each training fold) + logistic regression on the same folds: 0.778 ± 0.157.
 
-Next: Phase 4, channel subset selection with nested cross-validation. Existing scripts from the original blueprint:
+- `select_channels.py`: greedy forward channel selection inside nested cross-validation (channels chosen on training trials only). Subject 1, within-session: 8 channels 0.644 ± 0.183, 16 channels 0.711 ± 0.099, 32 channels 0.689 ± 0.214, vs 0.778 ± 0.157 for all 63. Fewer channels lost accuracy here, and the chosen channels changed from fold to fold.
+
+Next: Phase 5, compare against fixed motor-strip and random subsets across several subjects. Existing scripts from the original blueprint:
 
 - `streamer.py`: a working simulated 4-channel EEG stream over LSL (untested). It's an optional extension for testing real-time infrastructure; simulated data can't show real BCI performance.
 - `detector.py`: a stub (TODOs only) for LSL band power and a focus score.

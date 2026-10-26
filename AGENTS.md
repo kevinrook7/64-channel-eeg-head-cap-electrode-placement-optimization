@@ -176,8 +176,8 @@ Any prototype must prioritize **electrical safety, isolation, and suitable acqui
 | Dataset loading (eegmmidb) | Implemented, untested — `load_data.py` loads subject 1, runs 4/8/12, renames T0/T1/T2 per run before concatenating (checked by hand: 23 left / 22 right / 45 rest) |
 | Preprocessing & channel validation | Implemented, untested — `preprocess.py`: `colin27_1005` montage, 8–30 Hz band-pass, robust-z bad-channel check on filtered data (threshold \|z\| > 5; subject 1 flags T10), epochs −0.5 to 4.0 s for left/right → shape (45, 63, 721) |
 | Full-channel baseline | Implemented, untested — `baseline.py`: log band power (0.5–4.0 s) + L2 logistic regression, stratified 5-fold, seed 0. Subject 1, within-session: accuracy 0.533 ± 0.093 vs 0.511 majority-class (24/45 vs 23/45). CSP (6 filters, log-variance, fit inside each training fold) + logistic regression on the same folds: 0.778 ± 0.157. |
-| Channel subset optimization | Planned |
-| Evaluation framework (nested CV) | Planned |
+| Channel subset optimization | Implemented, untested — `select_channels.py`: greedy forward selection with CSP + LR, scored by inner 5-fold CV on training trials only; objective `accuracy − 0.005·|S|` picks a size along the greedy path. Subject 1, within-session, outer 5-fold: full 63ch 0.778 ± 0.157, greedy 8ch 0.644 ± 0.183, 16ch 0.711 ± 0.099, 32ch 0.689 ± 0.214, penalized (5–16ch) 0.667 ± 0.136. Chosen channels differ a lot between folds (no channel picked in more than 3/5 folds for the 8-channel set). ~9 min on 12 cores. |
+| Evaluation framework (nested CV) | Implemented, untested — nested CV in `select_channels.py` (outer 5-fold seed 0, same folds as `baseline.py`) |
 | Personalized recommendations | Planned |
 | Real-time inference / LSL | Planned (optional) |
 | `streamer.py` (LSL EEG simulator) | Implemented, untested (optional extension) |
