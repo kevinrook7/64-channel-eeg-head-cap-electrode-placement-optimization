@@ -2,3 +2,4 @@ pylsl==1.18.5
 numpy==2.5.3
 mne==1.13.2
 scikit-learn==1.9.1
+matplotlib==3.11.2
