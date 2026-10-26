@@ -3,54 +3,51 @@
 Outer loop (5 folds): estimates how well a selected subset works on unseen trials.
 Inner loop (5 folds, training trials only): scores candidate channels for greedy selection.
 The outer test trials are never seen during selection.
+
+Speed: the decoder is CSP + LR from fast_csp.py, which works on per-trial
+covariance matrices computed once. Same results as MNE's CSP (checked in
+fast_csp.py), about 9 min -> well under a minute per subject.
 """
 
 import time
 
-import mne
 import numpy as np
-from joblib import Parallel, delayed  # installed with scikit-learn
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 
-from baseline import N_CSP, N_SPLITS, SEED, make_csp_decoder, task_window
+from baseline import N_CSP, N_SPLITS, SEED, task_window
+from fast_csp import make_cov_csp_decoder, subset_covariances, trial_covariances
 from preprocess import prepare_epochs
-
-mne.set_log_level("WARNING")  # CSP otherwise prints for every fit
 
 SUBSET_SIZES = [8, 16, 32]
 INNER_SPLITS = 5
 # Objective: score(S) = inner_accuracy(S) - LAMBDA * |S|
 # LAMBDA = 0.005 means one extra channel must buy at least 0.5 accuracy points.
 LAMBDA = 0.005
-N_JOBS = -1  # use all CPU cores for candidate scoring
 
 
 def csp_decoder_for(n_channels, seed=SEED):
     # CSP can't return more filters than channels.
-    return make_csp_decoder(seed, n_components=min(N_CSP, n_channels))
+    return make_cov_csp_decoder(seed, n_components=min(N_CSP, n_channels))
 
 
-def subset_accuracy(X, y, channels, seed=SEED):
+def subset_accuracy(covs, y, channels, seed=SEED):
     """Inner-CV accuracy of CSP + LR using only `channels` (training trials only)."""
-    # Runs inside joblib worker processes, which don't inherit the log level set above.
-    mne.set_log_level("WARNING")
     cv = StratifiedKFold(n_splits=INNER_SPLITS, shuffle=True, random_state=seed)
     decoder = csp_decoder_for(len(channels), seed)
-    return cross_val_score(decoder, X[:, channels, :], y, cv=cv).mean()
+    return cross_val_score(decoder, subset_covariances(covs, channels), y, cv=cv).mean()
 
 
-def greedy_forward(X, y, max_size, seed=SEED, parallel=None):
+def greedy_forward(covs, y, max_size, seed=SEED):
     """Add one channel at a time, always the one that most improves inner-CV accuracy.
 
+    `covs` are per-trial covariances, shape (trials, channels, channels).
     Returns the selection order and the inner-CV accuracy after each addition.
     Ties go to the lowest channel index, so the result is deterministic.
     """
     selected, path = [], []
-    remaining = list(range(X.shape[1]))
+    remaining = list(range(covs.shape[1]))
     for _ in range(max_size):
-        scores = parallel(
-            delayed(subset_accuracy)(X, y, selected + [ch], seed) for ch in remaining
-        )
+        scores = [subset_accuracy(covs, y, selected + [ch], seed) for ch in remaining]
         best = int(np.argmax(scores))
         selected.append(remaining.pop(best))
         path.append(scores[best])
@@ -63,37 +60,37 @@ def penalized_size(path, lam=LAMBDA):
     return int(sizes[np.argmax(path - lam * sizes)])
 
 
-def test_accuracy(X_train, y_train, X_test, y_test, channels, seed=SEED):
+def test_accuracy(covs_train, y_train, covs_test, y_test, channels, seed=SEED):
     decoder = csp_decoder_for(len(channels), seed)
-    decoder.fit(X_train[:, channels, :], y_train)
-    return decoder.score(X_test[:, channels, :], y_test)
+    decoder.fit(subset_covariances(covs_train, channels), y_train)
+    return decoder.score(subset_covariances(covs_test, channels), y_test)
 
 
-def nested_cv(X, y, seed=SEED):
+def nested_cv(covs, y, seed=SEED, verbose=True):
     outer = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=seed)
-    all_channels = list(range(X.shape[1]))
+    all_channels = list(range(covs.shape[1]))
     max_size = max(SUBSET_SIZES)
     results = {"full": [], "penalized": [], **{k: [] for k in SUBSET_SIZES}}
     selections, penalized_sizes = [], []
 
-    with Parallel(n_jobs=N_JOBS) as parallel:
-        for fold, (train, test) in enumerate(outer.split(X, y), start=1):
-            start = time.time()
-            X_tr, y_tr, X_te, y_te = X[train], y[train], X[test], y[test]
+    for fold, (train, test) in enumerate(outer.split(covs, y), start=1):
+        start = time.time()
+        c_tr, y_tr, c_te, y_te = covs[train], y[train], covs[test], y[test]
 
-            # Selection sees training trials only.
-            selected, path = greedy_forward(X_tr, y_tr, max_size, seed, parallel)
-            k_pen = penalized_size(path)
+        # Selection sees training trials only.
+        selected, path = greedy_forward(c_tr, y_tr, max_size, seed)
+        k_pen = penalized_size(path)
 
-            results["full"].append(test_accuracy(X_tr, y_tr, X_te, y_te, all_channels, seed))
-            for k in SUBSET_SIZES:
-                results[k].append(test_accuracy(X_tr, y_tr, X_te, y_te, selected[:k], seed))
-            results["penalized"].append(
-                test_accuracy(X_tr, y_tr, X_te, y_te, selected[:k_pen], seed)
-            )
-            selections.append(selected)
-            penalized_sizes.append(k_pen)
+        results["full"].append(test_accuracy(c_tr, y_tr, c_te, y_te, all_channels, seed))
+        for k in SUBSET_SIZES:
+            results[k].append(test_accuracy(c_tr, y_tr, c_te, y_te, selected[:k], seed))
+        results["penalized"].append(
+            test_accuracy(c_tr, y_tr, c_te, y_te, selected[:k_pen], seed)
+        )
+        selections.append(selected)
+        penalized_sizes.append(k_pen)
 
+        if verbose:
             tests = ", ".join(f"{k}ch {results[k][-1]:.3f}" for k in SUBSET_SIZES)
             print(
                 f"fold {fold}: full {results['full'][-1]:.3f} | {tests} | "
@@ -111,13 +108,16 @@ def summarize(scores):
 if __name__ == "__main__":
     epochs = prepare_epochs(1)
     X = task_window(epochs)
+    covs = trial_covariances(X)
     y = epochs.events[:, 2]
     names = np.array(epochs.ch_names)
     majority = max((y == 2).sum(), (y == 3).sum()) / len(y)
     print("X shape (trials, channels, times):", X.shape)
     print(f"majority-class accuracy: {majority:.3f}\n")
 
-    results, selections, penalized_sizes = nested_cv(X, y)
+    start = time.time()
+    results, selections, penalized_sizes = nested_cv(covs, y)
+    print(f"total selection time: {time.time() - start:.0f}s")
 
     print("\nOuter-fold test accuracy (subject 1, within-session, CSP + LR):")
     print(f"  full ({X.shape[1]}ch): {summarize(results['full'])}")
