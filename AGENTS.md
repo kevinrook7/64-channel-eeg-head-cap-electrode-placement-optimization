@@ -175,7 +175,7 @@ Any prototype must prioritize **electrical safety, isolation, and suitable acqui
 | Documentation (this file, README, learning blueprint) | Implemented |
 | Dataset loading (eegmmidb) | Implemented, untested — `load_data.py` loads subject 1, runs 4/8/12, renames T0/T1/T2 per run before concatenating (checked by hand: 23 left / 22 right / 45 rest) |
 | Preprocessing & channel validation | Implemented, untested — `preprocess.py`: `colin27_1005` montage, 8–30 Hz band-pass, robust-z bad-channel check on filtered data (threshold \|z\| > 5; subject 1 flags T10), epochs −0.5 to 4.0 s for left/right → shape (45, 63, 721) |
-| Full-channel baseline | Implemented, untested — `baseline.py`: log band power (0.5–4.0 s) + L2 logistic regression, stratified 5-fold, seed 0. Subject 1, within-session: accuracy 0.533 ± 0.093 vs 0.511 majority-class (24/45 vs 23/45). CSP not started. |
+| Full-channel baseline | Implemented, untested — `baseline.py`: log band power (0.5–4.0 s) + L2 logistic regression, stratified 5-fold, seed 0. Subject 1, within-session: accuracy 0.533 ± 0.093 vs 0.511 majority-class (24/45 vs 23/45). CSP (6 filters, log-variance, fit inside each training fold) + logistic regression on the same folds: 0.778 ± 0.157. |
 | Channel subset optimization | Planned |
 | Evaluation framework (nested CV) | Planned |
 | Personalized recommendations | Planned |

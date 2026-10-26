@@ -1,6 +1,7 @@
 """All-channel baseline for left vs right motor imagery (Phase 3)."""
 
 import numpy as np
+from mne.decoding import CSP
 from preprocess import prepare_epochs
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold, cross_val_score
@@ -12,6 +13,7 @@ TASK_TMIN = 0.5
 TASK_TMAX = 4.0
 SEED = 0
 N_SPLITS = 5
+N_CSP = 6  # CSP filters kept: 3 "loud for left" + 3 "loud for right"
 
 def log_band_power(epochs, tmin=TASK_TMIN, tmax=TASK_TMAX):
     task = epochs.copy().crop(tmin=tmin, tmax=tmax)
@@ -25,9 +27,25 @@ def make_decoder(seed=SEED):
         ("clf", LogisticRegression(C=1.0, max_iter=1000,random_state=seed)),
     ])
 
-def cross_validate_accuracy(X, y, seed=SEED, n_splits=N_SPLITS):
+def task_window(epochs, tmin=TASK_TMIN, tmax=TASK_TMAX):
+    """Raw epoch data (trials, channels, times) for the imagery window."""
+    return epochs.copy().crop(tmin=tmin, tmax=tmax).get_data()
+
+def make_csp_decoder(seed=SEED, n_components=N_CSP):
+    # CSP uses the labels, so it sits inside the pipeline and is refit on
+    # each training fold only. log=True returns log(variance) per filter.
+    return Pipeline([
+        ("csp", CSP(n_components=n_components, log=True)),
+        ("scale", StandardScaler()),
+        ("clf", LogisticRegression(C=1.0, max_iter=1000, random_state=seed)),
+    ])
+
+def cross_validate_accuracy(X, y, decoder=None, seed=SEED, n_splits=N_SPLITS):
+    # Same seed -> same folds for every decoder, so scores are comparable.
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
-    return cross_val_score(make_decoder(), X, y, cv=cv, scoring="accuracy")
+    if decoder is None:
+        decoder = make_decoder(seed)
+    return cross_val_score(decoder, X, y, cv=cv, scoring="accuracy")
 
 if __name__ == "__main__":
     epochs = prepare_epochs(1)
@@ -44,3 +62,12 @@ if __name__ == "__main__":
     majority = max(n_left, n_right) / len(y)
     print(f"majority-class accuracy: {majority:.3f}")
     print(f"model minus majority: {scores.mean() - majority:+.3f}")
+
+    # CSP + logistic regression on the same trials and folds.
+    X_csp = task_window(epochs)
+    print("\nCSP input shape (trials, channels, times):", X_csp.shape)
+    csp_scores = cross_validate_accuracy(X_csp, y, decoder=make_csp_decoder())
+    print("CSP fold accuracies:", np.round(csp_scores, 3))
+    print(f"CSP CV accuracy: {csp_scores.mean():.3f} +/- {csp_scores.std(ddof=1):.3f}")
+    print(f"CSP minus majority: {csp_scores.mean() - majority:+.3f}")
+    print(f"CSP minus band power: {csp_scores.mean() - scores.mean():+.3f}")
