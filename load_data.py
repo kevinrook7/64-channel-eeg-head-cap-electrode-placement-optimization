@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import mne
 from mne.datasets import eegbci
 
@@ -10,7 +12,8 @@ def labels_for_run(run):
 
 SUBJECT = 1
 RUNS = [4,8,12]
-DATA_PATH = "C:/Users/LENOVO/Desktop/Neurotech/StayLocked/data"
+# Relative to this file, so the project folder can be renamed or moved.
+DATA_PATH = str(Path(__file__).resolve().parent / "data")
 
 EVENT_ID = {"rest": 1, "left_fist": 2, "right_fist": 3, "both_fists": 4, "both_feet": 5}
 

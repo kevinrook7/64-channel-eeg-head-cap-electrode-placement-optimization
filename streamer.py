@@ -23,7 +23,7 @@ info = StreamInfo(
     channel_count=CHANNELS,
     nominal_srate=SAMPLE_RATE,
     channel_format="float32",
-    source_id="staylocked-sim-001",
+    source_id="myeeg-sim-001",
 )
 
 outlet = StreamOutlet(info)

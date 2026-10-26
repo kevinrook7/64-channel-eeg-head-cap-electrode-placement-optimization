@@ -1,14 +1,10 @@
-# AGENTS.md — StayLocked
+# AGENTS.md — MyEEG
 
 Primary guidance for AI coding agents (Cursor, Claude, etc.) working in this repository. `CLAUDE.md`-style tools should treat this file as the source of truth.
 
-The developer is a beginner learning BCI and machine learning on Windows (PowerShell). **Teaching comes first, code output second.** Read [Learning approach](#8-learning-approach-build-and-deconstruct) before writing any code.
-
----
-
 ## 1. Project vision
 
-StayLocked is a **personalized EEG electrode-selection and placement optimization system** for brain-computer interfaces (BCIs).
+MyEEG is a **personalized EEG electrode-selection and placement optimization system** for brain-computer interfaces (BCIs).
 
 The goal is to find out which EEG channels / scalp positions carry the most useful information for decoding a *particular user's* intended action, and to test whether personalized configurations can reach comparable or better decoding with **fewer electrodes, less calibration time, or better robustness**.
 
