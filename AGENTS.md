@@ -146,7 +146,7 @@ These scripts came from the original blueprint and are now in the repo. Inspect 
 | `streamer.py` | Working simulator: 4-channel, 256 Hz LSL stream (`fakeEEG`) of a 10 Hz sine with per-channel amplitude/phase and Gaussian noise. | Optional extension: real-time infrastructure testing (pipeline stage 8) |
 | `detector.py` | Stub (TODO comments only): LSL inlet, FFT alpha/beta power, focus score. | Band-power code may later feed stage 4 (features); the focus score is an optional extension |
 | `agent.py` | Stub (TODO comments only): contextual-bandit activity recommender. | Optional extension; no defined BCI objective yet |
-| `requirements.txt` | `pylsl`, `numpy`, `mne`, `scikit-learn` (pinned). | scikit-learn added for the full-channel baseline |
+| `requirements.txt` | `pylsl`, `numpy`, `mne`, `scikit-learn`, `matplotlib`, `moabb` (pinned). | scikit-learn for the baseline; moabb loads BCI Competition IV 2a |
 
 General guidance:
 
@@ -174,6 +174,7 @@ Any prototype must prioritize **electrical safety, isolation, and suitable acqui
 | --- | --- |
 | Documentation (this file, README, learning blueprint) | Implemented |
 | Dataset loading (eegmmidb) | Implemented, untested — `load_data.py` loads subject 1, runs 4/8/12, renames T0/T1/T2 per run before concatenating (checked by hand: 23 left / 22 right / 45 rest) |
+| Dataset loading (BCI Competition IV 2a) | Implemented, untested — `load_bnci.py` via MOABB 1.7.2 (`BNCI2014_001`), data in `data/MNE-bnci-data/`. Checked by hand against the raw .mat file: EEG samples identical, MOABB's stim events mark trial start, so events are shifted +2 s to cue onset. Subject 1: 144 trials per session (72 left / 72 right), 22 EEG channels (C5 flagged as low-variance outlier in both sessions), 250 Hz. Quick CSP 5-fold check: session T 0.827 ± 0.114, session E 0.910 ± 0.040. License CC BY-ND 4.0: don't commit derived data. |
 | Preprocessing & channel validation | Implemented, untested — `preprocess.py`: `colin27_1005` montage, 8–30 Hz band-pass, robust-z bad-channel check on filtered data (threshold \|z\| > 5; subject 1 flags T10), epochs −0.5 to 4.0 s for left/right → shape (45, 63, 721) |
 | Full-channel baseline | Implemented, untested — `baseline.py`: log band power (0.5–4.0 s) + L2 logistic regression, stratified 5-fold, seed 0. Subject 1, within-session: accuracy 0.533 ± 0.093 vs 0.511 majority-class (24/45 vs 23/45). CSP (6 filters, log-variance, fit inside each training fold) + logistic regression on the same folds: 0.778 ± 0.157. |
 | Channel subset optimization | Implemented, untested — `select_channels.py`: greedy forward selection with CSP + LR, scored by inner 5-fold CV on training trials only; objective `accuracy − 0.005·|S|` picks a size along the greedy path. Subject 1, within-session, outer 5-fold: full 63ch 0.778 ± 0.157, greedy 8ch 0.644 ± 0.183, 16ch 0.711 ± 0.099, 32ch 0.689 ± 0.214, penalized (5–16ch) 0.667 ± 0.136. Chosen channels differ a lot between folds (no channel picked in more than 3/5 folds for the 8-channel set). ~9 min on 12 cores. |
