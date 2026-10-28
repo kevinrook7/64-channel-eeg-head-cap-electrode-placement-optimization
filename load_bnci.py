@@ -24,7 +24,7 @@ import mne
 import numpy as np
 from moabb.datasets import BNCI2014_001
 
-from preprocess import epochs_from_raw
+from preprocess import epochs_from_raw, filter_and_flag, make_epochs
 
 SESSIONS = {"T": "0train", "E": "1test"}
 # MOABB codes -> the codes used for PhysioNet (load_data.EVENT_ID), so the
@@ -49,15 +49,32 @@ def load_session(subject, session):
 
 
 def prepare_bnci_epochs(subject, session="T"):
-    """Same preprocessing as PhysioNet: 8-30 Hz, bad-channel check, epochs -0.5 to 4.0 s."""
+    """One session on its own: 8-30 Hz, bad-channel check, epochs -0.5 to 4.0 s."""
     raw, events = load_session(subject, session)
     return epochs_from_raw(raw, events)
 
 
+def prepare_bnci_sessions(subject):
+    """Both sessions with the SAME channel set, for cross-session use.
+
+    Each session is checked separately; a channel flagged in either session is
+    dropped from both, so a model trained on session T can be applied to E.
+    The check uses no labels, so looking at session E here leaks nothing.
+    """
+    filtered, events, bads = {}, {}, set()
+    for session in SESSIONS:
+        raw, events[session] = load_session(subject, session)
+        filtered[session], session_bads = filter_and_flag(raw)
+        bads.update(session_bads)
+    epochs = {s: make_epochs(filtered[s], events[s], sorted(bads)) for s in SESSIONS}
+    assert epochs["T"].ch_names == epochs["E"].ch_names
+    return epochs
+
+
 if __name__ == "__main__":
     mne.set_log_level("WARNING")
-    for session in SESSIONS:
-        epochs = prepare_bnci_epochs(1, session)
+    sessions = prepare_bnci_sessions(1)
+    for session, epochs in sessions.items():
         y = epochs.events[:, 2]
         print(
             f"subject 1, session {session}: {len(y)} trials "
