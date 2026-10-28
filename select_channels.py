@@ -66,11 +66,11 @@ def test_accuracy(covs_train, y_train, covs_test, y_test, channels, seed=SEED):
     return decoder.score(subset_covariances(covs_test, channels), y_test)
 
 
-def nested_cv(covs, y, seed=SEED, verbose=True):
+def nested_cv(covs, y, seed=SEED, verbose=True, sizes=SUBSET_SIZES):
     outer = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=seed)
     all_channels = list(range(covs.shape[1]))
-    max_size = max(SUBSET_SIZES)
-    results = {"full": [], "penalized": [], **{k: [] for k in SUBSET_SIZES}}
+    max_size = max(sizes)
+    results = {"full": [], "penalized": [], **{k: [] for k in sizes}}
     selections, penalized_sizes = [], []
 
     for fold, (train, test) in enumerate(outer.split(covs, y), start=1):
@@ -82,7 +82,7 @@ def nested_cv(covs, y, seed=SEED, verbose=True):
         k_pen = penalized_size(path)
 
         results["full"].append(test_accuracy(c_tr, y_tr, c_te, y_te, all_channels, seed))
-        for k in SUBSET_SIZES:
+        for k in sizes:
             results[k].append(test_accuracy(c_tr, y_tr, c_te, y_te, selected[:k], seed))
         results["penalized"].append(
             test_accuracy(c_tr, y_tr, c_te, y_te, selected[:k_pen], seed)
@@ -91,7 +91,7 @@ def nested_cv(covs, y, seed=SEED, verbose=True):
         penalized_sizes.append(k_pen)
 
         if verbose:
-            tests = ", ".join(f"{k}ch {results[k][-1]:.3f}" for k in SUBSET_SIZES)
+            tests = ", ".join(f"{k}ch {results[k][-1]:.3f}" for k in sizes)
             print(
                 f"fold {fold}: full {results['full'][-1]:.3f} | {tests} | "
                 f"penalized {k_pen}ch {results['penalized'][-1]:.3f} "

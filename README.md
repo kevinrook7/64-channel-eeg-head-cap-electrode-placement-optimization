@@ -24,7 +24,9 @@ Pipeline so far (Phases 1–4 on subject 1, Phase 5 on subjects 1–10):
 
 Learning-blueprint Phases 1–5 are now implemented for left vs right imagery. - `bnci_baseline.py`: all-channel baseline on BCI IV 2a, 9 subjects, within-session. CSP 0.773 ± 0.139 on session T and 0.806 ± 0.163 on session E (band power 0.692 / 0.707). 7 of 9 subjects decode well, unlike PhysioNet where only 3 of 10 did.
 
-Next: channel selection (4, 8, 16 channels) on BCI IV 2a, then pick channels on session 1 and test them on session 2. Existing scripts from the original blueprint:
+- `bnci_evaluate.py`: channel selection on BCI IV 2a, within-session, 4/8/16 channels. 16 channels lose only 1–2 points vs all 22. At 4 channels greedy beats the fixed motor strip by 2–4 points on average (clearly only on session E, 8 of 9 subjects), and random subsets by 5–7. Plots: `results/bnci_accuracy_vs_channels_T.png`, `..._E.png`.
+
+Next: pick channels on session 1 (day 1) and test them on session 2 (day 2). Existing scripts from the original blueprint:
 
 - `streamer.py`: a working simulated 4-channel EEG stream over LSL (untested). It's an optional extension for testing real-time infrastructure; simulated data can't show real BCI performance.
 - `detector.py`: a stub (TODOs only) for LSL band power and a focus score.

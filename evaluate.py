@@ -55,11 +55,16 @@ def fixed_subset_accuracy(covs, y, subsets, seed=SEED):
     return float(np.mean(scores))
 
 
-def evaluate_subject(subject, covs, y, names, seed=SEED):
+def evaluate_subject(subject, covs, y, names, seed=SEED, sizes=SUBSET_SIZES, rng_key=()):
+    """Full, greedy, motor-strip and random subsets for one recording.
+
+    `rng_key` makes the random draws differ between recordings of the same
+    subject (e.g. the two BCI IV 2a sessions) while staying reproducible.
+    """
     start = time.time()
     n_channels = covs.shape[1]
-    results, selections, penalized_sizes = nested_cv(covs, y, seed, verbose=False)
-    rng = np.random.default_rng([seed, subject])
+    results, selections, penalized_sizes = nested_cv(covs, y, seed, verbose=False, sizes=sizes)
+    rng = np.random.default_rng([seed, subject, *rng_key])
 
     out = {
         "subject": subject,
@@ -68,11 +73,11 @@ def evaluate_subject(subject, covs, y, names, seed=SEED):
         "full": float(np.mean(results["full"])),
         "penalized": float(np.mean(results["penalized"])),
         "penalized_sizes": penalized_sizes,
-        "greedy": {k: float(np.mean(results[k])) for k in SUBSET_SIZES},
+        "greedy": {k: float(np.mean(results[k])) for k in sizes},
         "motor": {},
         "random": {},
     }
-    for k in SUBSET_SIZES:
+    for k in sizes:
         out["motor"][k] = fixed_subset_accuracy(covs, y, [motor_subset(names, k)], seed)
         draws = [sorted(rng.choice(n_channels, k, replace=False)) for _ in range(N_RANDOM)]
         out["random"][k] = fixed_subset_accuracy(covs, y, draws, seed)
@@ -92,11 +97,11 @@ def mean_std(values):
     return f"{values.mean():.3f} +/- {values.std(ddof=1):.3f}"
 
 
-def plot_accuracy_vs_channels(rows, path):
-    sizes = np.array(SUBSET_SIZES)
+def plot_accuracy_vs_channels(rows, path, sizes=SUBSET_SIZES, title=None):
+    sizes = np.array(sizes)
     fig, ax = plt.subplots(figsize=(7, 4.5))
     for method, marker in [("greedy", "o"), ("motor", "s"), ("random", "^")]:
-        acc = np.array([[r[method][k] for k in SUBSET_SIZES] for r in rows])
+        acc = np.array([[r[method][k] for k in sizes] for r in rows])
         ax.errorbar(sizes, acc.mean(0), yerr=acc.std(0, ddof=1), marker=marker,
                     capsize=4, label=method)
     full = np.array([r["full"] for r in rows])
@@ -107,7 +112,7 @@ def plot_accuracy_vs_channels(rows, path):
     ax.set_xticks(list(sizes) + [round(n_full)])
     ax.set_xlabel("number of channels")
     ax.set_ylabel("held-out accuracy (mean ± std across subjects)")
-    ax.set_title(f"Left vs right imagery, CSP + LR, within-session, {len(rows)} subjects")
+    ax.set_title(title or f"Left vs right imagery, CSP + LR, within-session, {len(rows)} subjects")
     ax.legend()
     fig.tight_layout()
     fig.savefig(path, dpi=150)
