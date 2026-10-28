@@ -22,7 +22,9 @@ Pipeline so far (Phases 1–4 on subject 1, Phase 5 on subjects 1–10):
 - `load_bnci.py`: loads BCI Competition IV 2a (9 subjects, 2 sessions on different days, 144 left/right trials per session, 22 channels) through MOABB. `prepare_bnci_sessions()` gives both sessions the same channel set for cross-session tests.
 - The bad-channel check only drops flat or unusually noisy channels; quiet channels are kept, since they can still carry real signal.
 
-Learning-blueprint Phases 1–5 are now implemented for left vs right imagery. Next: run the pipeline on BCI Competition IV 2a, then pick channels on session 1 and test them on session 2. Existing scripts from the original blueprint:
+Learning-blueprint Phases 1–5 are now implemented for left vs right imagery. - `bnci_baseline.py`: all-channel baseline on BCI IV 2a, 9 subjects, within-session. CSP 0.773 ± 0.139 on session T and 0.806 ± 0.163 on session E (band power 0.692 / 0.707). 7 of 9 subjects decode well, unlike PhysioNet where only 3 of 10 did.
+
+Next: channel selection (4, 8, 16 channels) on BCI IV 2a, then pick channels on session 1 and test them on session 2. Existing scripts from the original blueprint:
 
 - `streamer.py`: a working simulated 4-channel EEG stream over LSL (untested). It's an optional extension for testing real-time infrastructure; simulated data can't show real BCI performance.
 - `detector.py`: a stub (TODOs only) for LSL band power and a focus score.
