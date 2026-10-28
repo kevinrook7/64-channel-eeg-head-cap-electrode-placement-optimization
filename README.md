@@ -26,7 +26,7 @@ Learning-blueprint Phases 1–5 are now implemented for left vs right imagery. -
 
 - `bnci_evaluate.py`: channel selection on BCI IV 2a, within-session, 4/8/16 channels. 16 channels lose only 1–2 points vs all 22. At 4 channels greedy beats the fixed motor strip by 2–4 points on average (clearly only on session E, 8 of 9 subjects), and random subsets by 5–7. Plots: `results/bnci_accuracy_vs_channels_T.png`, `..._E.png`.
 
-Next: pick channels on session 1 (day 1) and test them on session 2 (day 2). Existing scripts from the original blueprint:
+- `bnci_cross_session.py`: channels chosen and decoders trained on day 1, tested on day 2. All 22 channels drop from 0.806 (within-session) to 0.741. At 4 channels, day-1 greedy picks score 0.725 vs 0.698 for the motor strip (higher in 7 of 9 subjects) and 0.663 for random (8 of 9). But greedy run on each day separately picks different channels, with overlap no better than chance, so the "best" channels for a person aren't stable from day to day here. Plot: `results/bnci_cross_session.png`. Existing scripts from the original blueprint:
 
 - `streamer.py`: a working simulated 4-channel EEG stream over LSL (untested). It's an optional extension for testing real-time infrastructure; simulated data can't show real BCI performance.
 - `detector.py`: a stub (TODOs only) for LSL band power and a focus score.
