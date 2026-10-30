@@ -192,6 +192,6 @@ Any prototype must prioritize **electrical safety, isolation, and suitable acqui
 | `detector.py` (band power / focus score) | Planned — stub with TODOs only |
 | `agent.py` (contextual bandit) | Planned — stub with TODOs only (optional extension) |
 
-Nothing is **tested** yet. Update this table whenever a component moves to implemented or tested.
+The channel-selection leakage guarantee is now tested — `tests/test_no_leakage.py` (pytest): greedy sees only its training slice, train/test folds are disjoint in `nested_cv`, greedy finds the planted signal channels, and `subset_accuracy` respects the channels given (synthetic covariances, ~7 s, no EEG download). Everything else is still untested. Update this table whenever a component moves to implemented or tested.
 
 **Immediate goal:** a reproducible software proof of concept for personalized EEG channel selection (Level 1). Wait for the developer's approval before substantial implementation.
