@@ -30,6 +30,8 @@ Learning-blueprint Phases 1–5 are now implemented for left vs right imagery. -
 
 - `bnci_region_test.py`: tests whether the day-1 and day-2 greedy picks at least cover the same scalp *region*, since neighbouring electrodes are highly correlated. For each subject it measures the mean distance from each day-2 pick to its nearest day-1 pick (3D montage positions, cm) against 1000 random channel sets. The picks land only slightly closer than random (k=4: 3.6 vs 4.5 cm, closer in 7 of 9 subjects but p<0.05 in only 2; k=8: 2.6 vs 2.7 cm, 1 of 9; k=16: 0.9 vs 1.0 cm, 0 of 9), so the day-to-day instability is geometric, not just a choice between neighbours. No accuracy is scored, so there is no leakage. Plot: `results/bnci_region_test.png`.
 
+- `bnci_reverse_session.py`: reruns the cross-session test the other way (channels chosen and decoders trained on day 2, tested once on all 144 day-1 trials), to double the cross-session evidence. Greedy beats random and the motor strip in this direction too: at 4 channels greedy 0.705 vs motor 0.683 vs random 0.647 (greedy above random in 6 of 9 subjects), matching day 1 -> day 2 (0.725 / 0.698 / 0.663). So the accuracy claim holds in both directions, while the stability claim does not (region test). Reuses step 4's `cross_session_subject` with the sessions swapped; no leakage.
+
 Existing scripts from the original blueprint:
 
 - `streamer.py`: a working simulated 4-channel EEG stream over LSL (untested). It's an optional extension for testing real-time infrastructure; simulated data can't show real BCI performance.
