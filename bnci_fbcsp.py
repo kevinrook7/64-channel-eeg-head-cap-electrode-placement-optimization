@@ -24,7 +24,9 @@ worker count is capped (N_JOBS) to bound peak memory on a tight host; band
 covariances are built once per session and reused.
 """
 
+import json
 import time
+from pathlib import Path
 
 import mne
 import numpy as np
@@ -146,15 +148,28 @@ if __name__ == "__main__":
         }
         print(f"  subject {subject} ready ({time.time() - start:.0f}s)")
 
+    saved = {}
+
     # Step 3: within-session, session T then E (each session scored on its own folds).
     for sess in ("T", "E"):
         jobs = [(s, *loaded[s][sess][:2], loaded[s]["names"]) for s in SUBJECTS]
         rows = Parallel(n_jobs=N_JOBS)(delayed(within_session_subject)(*j) for j in jobs)
         summarize(rows, f"FBCSP within-session, session {sess}")
+        saved[f"within_{sess}"] = rows
 
     # Step 4: cross-session T -> E.
     jobs = [(s, *loaded[s]["T"], *loaded[s]["E"], loaded[s]["names"]) for s in SUBJECTS]
     rows = Parallel(n_jobs=N_JOBS)(delayed(cross_session_subject)(*j) for j in jobs)
     summarize(rows, "FBCSP cross-session, train T -> test E")
+    saved["cross_TE"] = rows
+
+    # Persist per-subject rows so figures can be drawn later without re-running
+    # this ~67 min job. Numbers only (no raw/derived EEG), so safe to keep.
+    RESULTS_DIR = Path(__file__).resolve().parent / "results"
+    RESULTS_DIR.mkdir(exist_ok=True)
+    out_path = RESULTS_DIR / "bnci_fbcsp_results.json"
+    with open(out_path, "w") as f:
+        json.dump({"sizes": BNCI_SIZES, "results": saved}, f, indent=2)
+    print(f"\nSaved per-subject results to {out_path}")
 
     print(f"\nTotal time: {time.time() - start:.0f}s")
