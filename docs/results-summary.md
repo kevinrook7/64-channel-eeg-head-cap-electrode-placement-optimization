@@ -55,6 +55,36 @@ gap is small (+0.019, 4/9). By 8-16 channels every method converges, because
 with most channels picked they all capture the same signal. Baseline decoding
 is healthy: 7 of 9 subjects decode well (vs only 3 of 10 on PhysioNet).
 
+## How few channels is enough
+
+The practical question for a wearable headset is not "do few channels beat
+random" but "how few can we keep and still match the full cap". The
+cross-session greedy curve (FBCSP, train day 1 -> test day 2, means over 9
+subjects) answers it:
+
+| channels | greedy accuracy | vs full 22 |
+| --- | --- | --- |
+| 4 | 0.761 | -0.011 |
+| 8 | 0.777 | +0.005 |
+| 16 | 0.796 | +0.024 |
+| 22 (all) | 0.772 | — |
+
+Read as a diminishing return:
+
+- **8 channels already match the full 22** (0.777 vs 0.772). Even 4 is within
+  ~0.01. Most of the decodable signal lives in a handful of channels.
+- **16 slightly beats 22** — dropping the 6 least useful channels removes noise.
+- Beyond 8, extra electrodes buy almost nothing on this task.
+
+So the fewest that still works, on this data, is about **8 well-placed
+channels**: full-cap accuracy, few enough to be wearable, with enough overlap to
+give the decoder slack when the best spot drifts. 4 channels is usable but thin —
+little redundancy, so it leans entirely on per-session recalibration.
+
+Two limits on this number: it holds only *with* per-session channel re-selection
+(a fixed 4 or 8 degrades, per the stability finding), and "works" here means
+left-vs-right hand only — more mental commands would likely need more channels.
+
 ## The stability finding
 
 Greedy run separately on each day picks **different** channels; the overlap of
@@ -92,7 +122,25 @@ The Level-1 question ("can personalized channel selection decode with fewer
 channels than a fixed baseline?") has a measured, honest answer on real
 multi-session EEG: **yes on accuracy** (a few good channels rival all 22, and
 beat a fixed motor strip), but **a person has no stable best-channel set day to
-day**. A practical BCI could use few channels, but would need to re-select them
-per session rather than fix one personal montage.
+day**.
 
-Parked (need PyTorch and more data): FBCNet, GANs, other deep models.
+For a wearable headset this translates to a concrete design:
+
+- **Count: ~8 electrodes.** That matches the full cap here while staying few
+  enough to wear daily and leaving redundancy for drift.
+- **Placement: a good *region*, not a pinpoint.** The best exact spot drifts, so
+  electrodes are fixed (no moving parts) over the informative motor area with
+  enough overlap that a neighbour catches the signal when the best spot shifts.
+- **Drift handled in software, by the decoder**, not by hardware: the montage is
+  fixed, and the decoder re-trains (and, where the hardware allows, re-selects)
+  each session. A fixed-forever per-person montage is the one option the data
+  rules out.
+
+The improvement over existing 64-channel rigs is not accuracy — it is
+*wearability*: usable accuracy from a cap a person will actually put on every
+day, at the cost of a short per-session recalibration.
+
+Parked (need PyTorch, more data, and ideally a GPU): FBCNet, GANs, and other
+deep models. Their aim is the *next* level — a decoder that tolerates the drift
+well enough to shrink or remove that recalibration. With only 9 subjects they
+may not beat CSP; that negative result would itself be informative.
