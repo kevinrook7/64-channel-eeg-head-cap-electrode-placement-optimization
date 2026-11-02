@@ -54,7 +54,7 @@ New work, kept in its own package so the Part 1 numbers above never move. It ans
 - **Causal.** A decision at time *t* uses only samples at or before *t*. A sliding window looks backward only; future samples are never read. Accuracy is reported as a function of **decision latency** (time since cue).
 - **No test-session leakage.** Channels are selected on **session 1 only**; session 2 is the stream.
 - **Recalibration is held out.** The *k* labeled recalibration trials are removed from the test set, so no trial is both trained on and scored.
-- **Transfer baseline uses no labels.** Euclidean alignment (He & Wu, 2020) aligns sessions using only the **unlabeled** incoming covariances — a fair, well-known cheap baseline.
+- **Transfer baseline uses no labels and is causal.** Euclidean alignment (He & Wu, 2020) aligns sessions using only the **unlabeled** incoming covariances, with the test reference a **running mean over trials seen so far** (never future trials) — online, not transductive.
 
 Modules:
 
@@ -72,17 +72,29 @@ Cross-subject means (9 subjects, 8 channels selected on session 1, left/right tw
 | condition | mean accuracy (n=9) |
 |---|---|
 | no recalibration (session-1 decoder as-is) | 0.728 |
-| **Euclidean alignment** (transfer, **0 labels**) | **0.750** |
+| **Euclidean alignment — causal** (running reference, **0 labels**) | **0.754** |
+| Euclidean alignment — transductive (all-trials reference, contrast only) | 0.750 |
 | quick recalibration, 5 labeled trials | 0.729 |
 | quick recalibration, 10 labeled trials | 0.735 |
 | quick recalibration, 20 labeled trials | 0.734 |
 | quick recalibration, 40 labeled trials | 0.748 |
 
-Decode latency: **0.055 ms per trial** — the trained decoder classifies a window far faster than real time, so latency is set by how much post-cue EEG you wait for, not by compute.
+Decode latency: **0.028 ms per trial** — the trained decoder classifies a window far faster than real time, so latency is set by how much post-cue EEG you wait for, not by compute.
+
+**Euclidean alignment is causal here.** The headline EA number whitens each test
+trial by the running mean of the test covariances *seen so far* (trials 0..t,
+`online.euclidean_alignment.streaming_reference`), never future trials — so it is
+online, not transductive. The transductive variant (one reference from *all* test
+trials) is reported above only for contrast; it is label-free but has seen the
+future, and it is not the headline. The two are within 0.004 of each other, so the
+finding does not rest on the transductive shortcut. The third panel of the figure
+shows causal EA's **running accuracy vs number of unlabeled trials seen**: it is
+noisy for the first ~10 trials (reference not yet stable), then settles near 0.75
+by ~20 trials and stays above the no-recalibration line.
 
 **Findings:**
 
-- **Free unsupervised transfer matches a labeled warm-up.** Euclidean alignment (0.750) — which spends *no* labels, using only the shape of the unlabeled incoming stream — equals or beats quick recalibration at every budget tested, including 40 labeled trials (0.748). On this dataset a short labeled warm-up buys little that alignment does not already give for free.
+- **Free, online, unsupervised transfer matches a labeled warm-up.** Causal Euclidean alignment (0.754) — which spends *no* labels and reads only the running shape of the unlabeled stream — equals or beats quick recalibration at every budget tested, including 40 labeled trials (0.748). On this dataset a short labeled warm-up buys little that causal alignment does not already give for free.
 - **Earlier decisions are better.** Accuracy *falls* as the window ends later (8 selected channels: 0.74 at 1.5 s → 0.63 at 3.5 s), so the discriminative imagery is early in the trial. The 8 selected channels track all 22 closely across the whole latency curve.
 - **Online decoding is real-time.** 0.055 ms/decision.
 - **Same hard-subject split as Part 1.** Subjects 3/8/9 decode ~0.88–0.92; subjects 2/5/6 sit near chance (~0.53–0.59) and no method rescues them — consistent with the deep-model result that the limit is signal, not method.
