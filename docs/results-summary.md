@@ -140,7 +140,49 @@ The improvement over existing 64-channel rigs is not accuracy — it is
 *wearability*: usable accuracy from a cap a person will actually put on every
 day, at the cost of a short per-session recalibration.
 
-Parked (need PyTorch, more data, and ideally a GPU): FBCNet, GANs, and other
-deep models. Their aim is the *next* level — a decoder that tolerates the drift
-well enough to shrink or remove that recalibration. With only 9 subjects they
-may not beat CSP; that negative result would itself be informative.
+## Deep models: do they beat CSP and shrink recalibration?
+
+The next-level question was whether a deep decoder could tolerate the day-to-day
+drift well enough to beat CSP's cross-session accuracy — and so reduce the need
+for per-session recalibration. Run on Google Colab (free NVIDIA GPU) using the
+same preprocessing exported to `.npz` (8–30 Hz, task window, 22 channels).
+Cross-session: train on day 1, score once on day 2, means over the 9 subjects.
+The number to beat is the FBCSP cross-session accuracy, **0.772**.
+
+| method | mean cross-session acc | training trials |
+| --- | --- | --- |
+| **FBCSP (the baseline to beat)** | **0.772** | 144 / subject |
+| EEGNet, per subject | 0.721 | 144 / subject |
+| EEGNet + domain adaptation (DANN) | 0.718 | 144 / subject |
+| EEGNet, pooled over all 9 subjects | 0.728 | 1296 |
+
+All three deep variants **lost to CSP**, by roughly 4–5 points:
+
+- **Plain deep net (0.721).** A compact EEGNet trained per subject fell short of
+  CSP. Three subjects decoded well (1, 3, 8, 9 ~0.87–0.97); three sat near
+  chance (2, 6, 7 ~0.50–0.54). The split is the small-data signature: 144 trials
+  is too few to learn some subjects.
+- **Domain adaptation (0.718).** Adding a gradient-reversal domain head —
+  showing the model day-2 signals (no labels) and forcing day-1/day-2 features
+  to look alike — is the actual drift-fighting trick. It changed nothing
+  (0.718 vs 0.721 is noise). With this little data there was not enough signal
+  to learn what "the same across days" looks like.
+- **Pooled training (0.728).** Training one model on all 9 subjects' day 1
+  (1296 trials, 9× the data) then testing each subject's own day 2 gained only
+  +0.007 over the per-subject net. Nine times the data did **not** rescue it,
+  and the weak subjects stayed weak — so the limit is not merely data volume at
+  this scale; CSP is simply the better tool here.
+
+**Honest verdict.** On BCI IV 2a, deep learning did not beat CSP for
+few-channel cross-session motor imagery — not plain, not with drift adaptation,
+not with pooled data. No method removed the need for per-session recalibration.
+This strengthens rather than weakens the headset conclusion: the simple method
+(CSP) is the right one at this scale, and recalibration stays.
+
+Limits on this negative result: it is one dataset and 9 subjects. Pooling is not
+the same as truly more *subjects* — a large multi-subject corpus (50+ people)
+might still let deep models win, which is the one door left open and needs data
+not available here. Still parked for that reason: GANs for synthetic sessions,
+and a cross-dataset check (e.g. BCI IV 2b). The Colab experiment code lives
+alongside the export script (`export_for_colab.py`) and the plan in
+`docs/deep-model-plan.md`.
