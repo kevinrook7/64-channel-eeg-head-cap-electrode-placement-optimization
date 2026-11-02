@@ -67,39 +67,32 @@ Modules:
 
 ### Results
 
-Cross-subject means (9 subjects, 8 channels selected on session 1, left/right two-class, held-out session 2). The decision uses a **causal 2.0 s window ending 2.0 s after the cue**. Exact per-subject numbers are in `results/online_results.json`; the figure is `results/online_recalibration.png`.
+Cross-subject means (9 subjects, 8 channels selected on session 1, left/right two-class, held-out session 2). The headline decision uses a **causal 2.0 s window ending 2.0 s after the cue**. Quick-recalibration numbers are averaged over 10 random balanced draws of which trials are used. Exact per-subject numbers are in `results/online_results.json`; the figure is `results/online_recalibration.png`.
 
 | condition | mean accuracy (n=9) |
 |---|---|
 | no recalibration (session-1 decoder as-is) | 0.728 |
 | **Euclidean alignment — causal** (running reference, **0 labels**) | **0.754** |
 | Euclidean alignment — transductive (all-trials reference, contrast only) | 0.750 |
-| quick recalibration, 5 labeled trials | 0.729 |
-| quick recalibration, 10 labeled trials | 0.735 |
-| quick recalibration, 20 labeled trials | 0.734 |
-| quick recalibration, 40 labeled trials | 0.748 |
+| quick recalibration, 5 labeled trials | 0.731 |
+| quick recalibration, 10 labeled trials | 0.732 |
+| quick recalibration, 20 labeled trials | 0.741 |
+| quick recalibration, 40 labeled trials | 0.753 |
+| causal EA + recalibration, 40 labeled trials | 0.755 |
 
-Decode latency: **0.028 ms per trial** — the trained decoder classifies a window far faster than real time, so latency is set by how much post-cue EEG you wait for, not by compute.
+Decode latency: **0.22 ms per window, end to end** — this covers covariance from the raw window samples, the channel-subset slice, CSP log-power, and the logistic-regression call. It excludes the one-off per-session band-pass filter (done once up front, not per window). Either way the decoder is far faster than real time, so latency is set by how much post-cue EEG you wait for, not by compute.
 
-**Euclidean alignment is causal here.** The headline EA number whitens each test
-trial by the running mean of the test covariances *seen so far* (trials 0..t,
-`online.euclidean_alignment.streaming_reference`), never future trials — so it is
-online, not transductive. The transductive variant (one reference from *all* test
-trials) is reported above only for contrast; it is label-free but has seen the
-future, and it is not the headline. The two are within 0.004 of each other, so the
-finding does not rest on the transductive shortcut. The third panel of the figure
-shows causal EA's **running accuracy vs number of unlabeled trials seen**: it is
-noisy for the first ~10 trials (reference not yet stable), then settles near 0.75
-by ~20 trials and stays above the no-recalibration line.
+**Euclidean alignment is causal here.** The headline EA number whitens each test trial by the running mean of the test covariances *seen so far* (trials 0..t, `online.euclidean_alignment.streaming_reference`), never future trials — so it is online, not transductive. The transductive variant (one reference from *all* test trials) is reported above only for contrast; it is label-free but has seen the future, and it is not the headline. The two are **indistinguishable** (0.754 vs 0.750, within 0.004), so the finding does not rest on the transductive shortcut.
 
 **Findings:**
 
-- **Free, online, unsupervised transfer matches a labeled warm-up.** Causal Euclidean alignment (0.754) — which spends *no* labels and reads only the running shape of the unlabeled stream — equals or beats quick recalibration at every budget tested, including 40 labeled trials (0.748). On this dataset a short labeled warm-up buys little that causal alignment does not already give for free.
-- **Earlier decisions are better.** Accuracy *falls* as the window ends later (8 selected channels: 0.74 at 1.5 s → 0.63 at 3.5 s), so the discriminative imagery is early in the trial. The 8 selected channels track all 22 closely across the whole latency curve.
-- **Online decoding is real-time.** 0.055 ms/decision.
-- **Same hard-subject split as Part 1.** Subjects 3/8/9 decode ~0.88–0.92; subjects 2/5/6 sit near chance (~0.53–0.59) and no method rescues them — consistent with the deep-model result that the limit is signal, not method.
+- **Free, online, unsupervised transfer is comparable to a labeled warm-up.** Causal Euclidean alignment (0.754) — which spends *no* labels and reads only the running shape of the unlabeled stream — is comparable to quick recalibration at every budget tested, including 40 labeled trials (0.753). The per-subject paired effect (causal EA minus no-recal) is **mean +0.026, positive in 7 of 9 subjects, Wilcoxon signed-rank p = 0.078** — a consistent direction but **not significant at n = 9** (one subject is −0.035). So the honest claim is "EA helps most subjects a little, about as much as a short warm-up, for free," not a proven win. Combining them (causal EA + 40 labeled trials, 0.755) adds essentially nothing over EA alone.
+- **Longer windows decode better; earlier decisions are still better.** The window-length sweep (0.5 / 1.0 / 1.5 / 2.0 s) shows a longer window beats a shorter one at every latency, and within any fixed window length accuracy falls as the window ends later — so the drop with latency is a **real** effect (the discriminative imagery is early in the trial), not only the pre-cue artifact below. The 8 selected channels track all 22 closely across the latency curve.
+- **A short window at short latency can dip into pre-cue baseline.** With a 2.0 s window, a decision at 1.5 s latency would start 0.5 s *before* the cue and mix in resting EEG; the sweep drops such windows, so every plotted point is a clean post-cue decision. (This is why an earlier version's 1.5 s point looked inflated.)
+- **Online decoding is real-time.** 0.22 ms end-to-end per window.
+- **Same hard-subject split as Part 1.** Subjects 3/8/9 decode ~0.88–0.92; subjects 2/5/6 sit near chance (~0.53–0.59), and none of the methods tried rescues them — consistent with the deep-model result that the limit is signal, not method.
 
-Honest limits: one dataset (BCI IV 2a), 9 subjects, two classes; a 2.0 s window means the latency sweep cannot report latencies below ~1.5 s (the window would not fit before the cue). The recalibration gain is small and within the across-subject spread, so "a short warm-up helps a little, alignment helps as much for free" is the honest reading, not a strong recalibration win.
+Honest limits: one dataset (BCI IV 2a), 9 subjects, two classes. The EA gain over no-recalibration is consistent in direction but not significant at this sample size. **Causal EA's cost is a warm-up of its own kind:** its running reference is noisy for the first ~10 unlabeled trials and only settles by ~20 trials seen (figure panel 3) — so it is not instant, it just needs *unlabeled* trials rather than labeled ones. A 2.0 s window also cannot report latencies whose window would start before the cue (dropped in the sweep).
 
 ### Reproduce Part 2
 
