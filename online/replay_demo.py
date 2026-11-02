@@ -18,8 +18,8 @@ Usage:
     python -m online.replay_demo --subject 1 --plot       # live matplotlib window
     python -m online.replay_demo --subject 1 --recal 20   # warm up on 20 session-2 trials first
 
-Note the labels in the .npz are already 0/1 (export_for_colab mapped 2->0, 3->1),
-so here 0 = left, 1 = right.
+Note the labels in these .npz files are 2 = left, 3 = right (export_for_colab.py
+keeps the original BNCI codes; the separate Colab export remapped to 0/1).
 """
 
 import argparse
@@ -30,7 +30,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DATA = ROOT / "export_npz"
-LABELS = {0: "LEFT ", 1: "RIGHT"}
+LABELS = {2: "LEFT ", 3: "RIGHT"}
 
 
 def _covs(X):
@@ -92,7 +92,7 @@ def run(subject, data_dir, n_select=8, win_len=2.0, step=0.25, recal=0, plot=Fal
     if recal > 0:
         per = recal // 2
         idx = []
-        for c in (0, 1):
+        for c in (2, 3):
             idx.extend(np.where(yte == c)[0][:per].tolist())
         idx = np.array(sorted(idx))
         Xtr = np.concatenate([Xtr, Xte[idx]])
@@ -116,7 +116,7 @@ def run(subject, data_dir, n_select=8, win_len=2.0, step=0.25, recal=0, plot=Fal
             sub = subset_covariances(cov[None], selected)
             pred = int(dec.predict(sub)[0])
             last = pred
-            bar = "<<<<" if pred == 0 else ">>>>"
+            bar = "<<<<" if pred == 2 else ">>>>"
             print(f"\rtrial {t+1:3d}/{len(Xte)}  t+{latency:4.2f}s  "
                   f"pred {LABELS[pred]} {bar}   (true {true})", end="", flush=True)
             time.sleep(0.03)
@@ -140,8 +140,8 @@ def _run_plot(dec, selected, Xte, yte, sfreq, win_len, step, cue_offset):
         for latency, cov in causal_windows_for_trial(Xte[t], sfreq, win_len, step, cue_offset):
             pred = int(dec.predict(subset_covariances(cov[None], selected))[0])
             last = pred
-            arrow.set_text("<<" if pred == 0 else ">>")
-            arrow.set_color("tab:blue" if pred == 0 else "tab:red")
+            arrow.set_text("<<" if pred == 2 else ">>")
+            arrow.set_color("tab:blue" if pred == 2 else "tab:red")
             label.set_text(f"trial {t+1}/{len(Xte)}  t+{latency:.2f}s  "
                            f"pred {LABELS[pred].strip()}  (true {LABELS[yte[t]].strip()})")
             fig.canvas.draw(); fig.canvas.flush_events()
