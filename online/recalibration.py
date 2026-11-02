@@ -49,6 +49,9 @@ RECAL_SIZES = [0, 5, 10, 20, 40]
 # Causal EA needs a few unlabeled trials before its running reference is stable;
 # earlier trials reuse the first stable reference (see streaming_reference).
 EA_MIN_TRIALS = 10
+# Quick recalibration is averaged over this many random balanced draws of which
+# k trials are used, so the reported curve is not one noisy draw.
+N_DRAWS = 10
 
 
 def _balanced_prefix(y, k, seed=0):
@@ -67,6 +70,22 @@ def _balanced_prefix(y, k, seed=0):
     for c in classes:
         c_idx = np.where(y == c)[0][:per]      # earliest `per` trials of class c
         idx.extend(c_idx.tolist())
+    return np.array(sorted(idx))
+
+
+def _balanced_draw(y, k, rng):
+    """Random class-balanced sample of k trial indices (for averaging over draws).
+
+    Unlike _balanced_prefix (earliest k, for the strictly-causal demo), this draws
+    k/2 of each class at random, so averaging over draws removes the which-trials
+    sampling noise. Still label-aware (recalibration is supervised by definition).
+    """
+    classes = np.unique(y)
+    per = k // len(classes)
+    idx = []
+    for c in classes:
+        c_idx = np.where(y == c)[0]
+        idx.extend(rng.choice(c_idx, size=min(per, len(c_idx)), replace=False).tolist())
     return np.array(sorted(idx))
 
 
@@ -132,18 +151,38 @@ def recalibration_curve(covs_tr, y_tr, covs_te, y_te, channels=None,
     aligned_trans, _ = align(sub_te)
     out["ea_transductive"] = float(ea_dec.score(aligned_trans, y_te))
 
-    # --- quick recalibration: add k labeled test trials, refit, score the rest ---
+    # --- quick recalibration, AVERAGED over random draws of which k trials ---
+    # A single draw of "the first k" is sampling-noisy, so for each k we average
+    # over N_DRAWS random balanced draws and report mean +/- s.d. The k trials are
+    # removed from the scored set every time (held out). Session 1 is always kept
+    # and the k new trials are added to it ("session 1 + k"), which is fairer than
+    # fitting on k trials alone.
+    out["recal"], out["recal_std"] = [], []
+    out["recal_ea"], out["recal_ea_std"] = [], []       # EA + k labeled trials (the combo)
     for k in recal_sizes:
-        recal_idx = _balanced_prefix(y_te, k, seed)
-        mask = np.ones(len(y_te), dtype=bool)
-        mask[recal_idx] = False                          # held-out test = everything not used to recalibrate
         if k == 0:
-            out["recal"].append(out["no_recal"])
+            out["recal"].append(out["no_recal"]); out["recal_std"].append(0.0)
+            out["recal_ea"].append(out["ea"]); out["recal_ea_std"].append(0.0)
             continue
-        covs_aug = np.concatenate([covs_tr, covs_te[recal_idx]])
-        y_aug = np.concatenate([y_tr, y_te[recal_idx]])
-        dec = fit_decoder(covs_aug, y_aug, channels, seed)
-        out["recal"].append(float(score(dec, covs_te[mask], y_te[mask], channels)))
+        plain, combo = [], []
+        for d in range(N_DRAWS):
+            rng = np.random.default_rng(seed * 100 + d)
+            recal_idx = _balanced_draw(y_te, k, rng)
+            mask = np.ones(len(y_te), dtype=bool); mask[recal_idx] = False
+
+            # plain recalibration: session 1 + k new labeled trials, refit.
+            covs_aug = np.concatenate([covs_tr, covs_te[recal_idx]])
+            y_aug = np.concatenate([y_tr, y_te[recal_idx]])
+            dec = fit_decoder(covs_aug, y_aug, channels, seed)
+            plain.append(score(dec, covs_te[mask], y_te[mask], channels))
+
+            # EA + recalibration: align everything, then fit on aligned sess1 + k.
+            ea_covs_aug = np.concatenate([aligned_tr, aligned_causal[recal_idx]])
+            ea_dec_k = make_cov_csp_decoder(seed, n_components=n)
+            ea_dec_k.fit(ea_covs_aug, y_aug)
+            combo.append(float((ea_dec_k.predict(aligned_causal[mask]) == y_te[mask]).mean()))
+        out["recal"].append(float(np.mean(plain))); out["recal_std"].append(float(np.std(plain, ddof=1)))
+        out["recal_ea"].append(float(np.mean(combo))); out["recal_ea_std"].append(float(np.std(combo, ddof=1)))
     return out
 
 
