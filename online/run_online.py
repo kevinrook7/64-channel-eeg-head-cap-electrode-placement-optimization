@@ -34,6 +34,7 @@ WIN_LEN = 2.0          # seconds of look-back
 DECISION_LATENCY = 2.0  # window ends 2.0 s after cue (so it spans cue+0.0 .. cue+2.0 s)
 CUE_OFFSET = 0.5        # BNCI epochs start 0.5 s before the cue (tmin = -0.5)
 LATENCIES = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5]  # decision latencies for sweep A
+WIN_LENS = [0.5, 1.0, 1.5, 2.0]  # window lengths for the window-length sweep (A2)
 N_SELECT = 8           # channels to select on session 1 (v1's practical subset)
 SEED = 0
 
@@ -71,16 +72,35 @@ def run_subject(subject):
     lat_sel = latency_curve(X_tr, y_tr, X_te, y_te, sfreq, LATENCIES,
                             win_len=WIN_LEN, cue_offset=CUE_OFFSET, channels=selected, seed=SEED)
 
+    # --- Sweep A2: window-LENGTH sweep (selected subset), pre-cue windows dropped ---
+    from online.causal_decoder import window_length_sweep
+    winlen_sweep = window_length_sweep(X_tr, y_tr, X_te, y_te, sfreq,
+                                       WIN_LENS, LATENCIES, cue_offset=CUE_OFFSET,
+                                       channels=selected, seed=SEED, drop_precue=True)
+
     # --- Sweep B: accuracy vs recalibration trials (selected subset) ---
     covs_tr = window_covs_for(X_tr, sfreq, WIN_LEN, DECISION_LATENCY, CUE_OFFSET)
     covs_te = window_covs_for(X_te, sfreq, WIN_LEN, DECISION_LATENCY, CUE_OFFSET)
 
     # Measure DECODE latency: wall-clock to score one held-out window of covariances.
     from online.recalibration import fit_decoder, score
-    t0 = time.perf_counter()
+    # Measure END-TO-END decode latency per window: take the raw causal window
+    # samples and time covariance + channel-subset + classify (what a live device
+    # runs each step). Band-pass filtering is done once per session up front in
+    # this offline pipeline, not per window, so it is excluded and that is stated.
+    from online.causal_decoder import window_bounds
     dec = fit_decoder(covs_tr, y_tr, selected, SEED)
-    _ = score(dec, covs_te, y_te, selected)
-    decode_ms = (time.perf_counter() - t0) / len(y_te) * 1000  # per-trial, ms
+    bnd = window_bounds(sfreq, WIN_LEN, [DECISION_LATENCY], CUE_OFFSET)[0]
+    start, stop = bnd
+    one_window_raw = X_te[:, :, start:stop]            # raw samples per trial for this window
+    sel = np.asarray(selected)
+    t0 = time.perf_counter()
+    for i in range(len(y_te)):
+        w = one_window_raw[i]                           # (channels, times)
+        cov = (w @ w.T) / w.shape[1]                    # covariance from raw samples
+        sub = cov[sel[:, None], sel[None, :]][None]     # channel subset
+        _ = dec.predict(sub)                            # CSP log-power + LR
+    decode_ms = (time.perf_counter() - t0) / len(y_te) * 1000  # end-to-end, ms/window
 
     recal = recalibration_curve(covs_tr, y_tr, covs_te, y_te, channels=selected, seed=SEED)
 
@@ -93,8 +113,10 @@ def run_subject(subject):
             "acc_all": lat_all[1].tolist(),
             "acc_selected": lat_sel[1].tolist(),
         },
+        "winlen_sweep": {str(wl): winlen_sweep[wl] for wl in winlen_sweep},
         "recalibration": recal,
-        "decode_ms_per_trial": round(decode_ms, 3),
+        "decode_ms_per_window_end_to_end": round(decode_ms, 3),
+        "decode_ms_covers": "covariance + channel-subset + CSP log-power + LR; excludes one-off per-session band-pass",
         "window_len_s": WIN_LEN,
         "decision_latency_s": DECISION_LATENCY,
     }
@@ -110,7 +132,7 @@ def main(subjects=range(1, 10)):
         print(
             f"subject {s}: no-recal {rc['no_recal']:.3f} | EA {rc['ea']:.3f} | "
             f"recal@20 {rc['recal'][rc['sizes'].index(20)]:.3f} | "
-            f"decode {r['decode_ms_per_trial']:.2f} ms/trial ({time.time()-start:.0f}s)"
+            f"decode {r['decode_ms_per_window_end_to_end']:.3f} ms/window ({time.time()-start:.0f}s)"
         )
     RESULTS.parent.mkdir(exist_ok=True)
     RESULTS.write_text(json.dumps(results, indent=2))
@@ -132,7 +154,27 @@ def main(subjects=range(1, 10)):
     for i, k in enumerate(sizes):
         m = float(np.mean([r["recalibration"]["recal"][i] for r in results]))
         print(f"recal@{k:<3}:", round(m, 3))
-    print("decode ms/trial:", round(mean_over(["decode_ms_per_trial"]), 3))
+    print("decode ms/window (end-to-end):", round(mean_over(["decode_ms_per_window_end_to_end"]), 3))
+
+    # --- paired statistics: causal EA minus no-recal, per subject ---
+    from scipy.stats import wilcoxon
+    diffs = np.array([r["recalibration"]["ea"] - r["recalibration"]["no_recal"] for r in results])
+    n_up = int((diffs > 0).sum())
+    print("\n--- paired: causal EA minus no-recal (per subject) ---")
+    for r, d in zip(results, diffs):
+        print(f"  subject {r['subject']}: {d:+.3f}")
+    print(f"mean diff: {diffs.mean():+.3f}  ({n_up}/{len(diffs)} subjects improve)")
+    try:
+        stat, p = wilcoxon(diffs)
+        print(f"Wilcoxon signed-rank: W={stat:.1f}, p={p:.4f} (two-sided)")
+        wp = float(p); ww = float(stat)
+    except ValueError as e:
+        print(f"Wilcoxon not computable: {e}")
+        wp = ww = None
+    stats = {"mean_diff": float(diffs.mean()), "n_improve": n_up, "n": len(diffs),
+             "wilcoxon_W": ww, "wilcoxon_p": wp, "per_subject_diff": diffs.tolist()}
+    # Append stats as a trailing record so the JSON stays a list the plot reads.
+    RESULTS.write_text(json.dumps(results + [{"paired_stats_ea_vs_norecal": stats}], indent=2))
     print(f"\nwrote {RESULTS}")
 
 
