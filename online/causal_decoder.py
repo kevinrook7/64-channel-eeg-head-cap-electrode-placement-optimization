@@ -110,3 +110,36 @@ def latency_curve(X_train, y_train, X_test, y_test, sfreq, latencies,
         accs.append(score_window(decoder, covs_te[i], y_test, channels))
         lats.append(lat)
     return np.array(lats), np.array(accs)
+
+
+def crosses_precue(sfreq, win_len, latency, cue_offset):
+    """True if the causal window ending at `latency` dips before the cue.
+
+    A window that starts before the cue mixes resting EEG into the covariance, so
+    its accuracy is not a clean "imagery decoded by time t" number. The sweep uses
+    this to flag (and optionally drop) such points rather than plotting them as if
+    they were pure post-cue decisions.
+    """
+    start = int(round((cue_offset + latency - win_len) * sfreq))
+    return start < int(round(cue_offset * sfreq))
+
+
+def window_length_sweep(X_train, y_train, X_test, y_test, sfreq, win_lens, latencies,
+                        cue_offset=0.5, channels=None, seed=0, drop_precue=True):
+    """Accuracy vs decision latency for several window LENGTHS.
+
+    Returns {win_len -> (latencies, accuracies)}. When drop_precue is True, a
+    latency whose window crosses the pre-cue baseline is skipped for that window
+    length, so every plotted point is a clean post-cue decision. This is the sweep
+    that separates "longer window = more signal" from "earlier window = less data
+    but also, at short latency, contaminated by pre-cue baseline".
+    """
+    out = {}
+    for wl in win_lens:
+        keep = [lat for lat in latencies
+                if not (drop_precue and crosses_precue(sfreq, wl, lat, cue_offset))]
+        lats, accs = latency_curve(X_train, y_train, X_test, y_test, sfreq, keep,
+                                   win_len=wl, cue_offset=cue_offset,
+                                   channels=channels, seed=seed)
+        out[wl] = (lats.tolist(), accs.tolist())
+    return out
