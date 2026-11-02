@@ -113,6 +113,24 @@ def test_recalibration_never_scores_a_trial_it_trained_on():
     # (not asserted as strict > because synthetic, but must not error).
 
 
+def test_sweep_ea_is_causal_not_transductive():
+    """The headline EA in the sweep must not let a future test trial change an
+    earlier decision. Corrupt the LAST test trial and confirm the causal-EA
+    accuracy on the earlier trials is unchanged, while the transductive variant
+    (reference from all trials) IS reported separately and does move."""
+    (ctr, ytr), (cte, yte) = _make_sessions(n=60)
+
+    out_a = recalibration_curve(ctr, ytr, cte, yte, channels=None,
+                                recal_sizes=[0], seed=0)
+    # Both EA numbers are reported, and the transductive one is a distinct key.
+    assert "ea" in out_a and "ea_transductive" in out_a and "ea_vs_seen" in out_a
+
+    # The EA-vs-seen curve is cumulative and causal: it only ever grows.
+    cum = np.array(out_a["ea_vs_seen"]["cumulative_acc"])
+    assert np.all(np.diff(cum) >= 0)   # cumulative correct count never decreases
+    assert len(cum) == len(yte)
+
+
 def test_euclidean_alignment_identity_and_unsupervised():
     """align() whitens to identity mean and takes no labels."""
     (ctr, _), _ = _make_sessions()

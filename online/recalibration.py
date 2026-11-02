@@ -27,7 +27,12 @@ Leakage controls:
   * The k recalibration trials are removed from the test set, so no trial is both
     trained on and scored.
   * Channel selection used session 1 only (step 1).
-  * EA's test reference uses unlabeled covariances only.
+  * EA's test reference is CAUSAL: trial t is whitened by the running mean of
+    test covariances 0..t only (streaming_reference), never future trials. The
+    headline "ea" number uses this causal reference. A transductive variant
+    (reference from all test trials) is reported separately as "ea_transductive"
+    for contrast only -- it is label-free but has seen the future, so it is not
+    online and is never the headline.
 
 Latency: the window length and decision latency are fixed for the sweep (default
 a 2.0 s window ending 2.0 s after the cue) so the x-axis is purely "recalibration
@@ -41,6 +46,9 @@ from online.causal_decoder import window_bounds, window_covariances
 from online.euclidean_alignment import align, reference_covariance
 
 RECAL_SIZES = [0, 5, 10, 20, 40]
+# Causal EA needs a few unlabeled trials before its running reference is stable;
+# earlier trials reuse the first stable reference (see streaming_reference).
+EA_MIN_TRIALS = 10
 
 
 def _balanced_prefix(y, k, seed=0):
@@ -89,15 +97,40 @@ def recalibration_curve(covs_tr, y_tr, covs_te, y_te, channels=None,
     base = fit_decoder(covs_tr, y_tr, channels, seed)
     out["no_recal"] = float(score(base, covs_te, y_te, channels))
 
-    # --- Euclidean alignment: unsupervised transfer, zero labels (constant) ---
+    # --- Euclidean alignment ---
+    # Training session is offline, so its reference is its own mean (fine).
+    # The TEST session is a stream: trial t may use ONLY trials 0..t to form its
+    # reference -- a causal running mean -- never future trials. The older
+    # transductive variant (reference from ALL test trials) is kept for contrast
+    # under "ea_transductive" so the gap between causal and transductive is visible.
+    from online.euclidean_alignment import inv_sqrt, streaming_reference
+
     sub_tr = subset_covariances(covs_tr, channels) if channels is not None else covs_tr
     sub_te = subset_covariances(covs_te, channels) if channels is not None else covs_te
-    aligned_tr, _ = align(sub_tr)                       # train reference = session-1 mean
-    aligned_te, _ = align(sub_te)                       # test reference  = unlabeled session-2 mean
     n = min(6, sub_tr.shape[1])
+
+    aligned_tr, _ = align(sub_tr)                       # train reference = session-1 mean
     ea_dec = make_cov_csp_decoder(seed, n_components=n)
     ea_dec.fit(aligned_tr, y_tr)
-    out["ea"] = float(ea_dec.score(aligned_te, y_te))
+
+    # Causal EA: whiten each test trial by the running mean of trials seen so far.
+    refs = streaming_reference(sub_te, min_trials=EA_MIN_TRIALS)   # (trials, c, c), causal
+    aligned_causal = np.stack([inv_sqrt(refs[t]) @ sub_te[t] @ inv_sqrt(refs[t])
+                               for t in range(len(sub_te))])
+    preds = ea_dec.predict(aligned_causal)
+    out["ea"] = float((preds == y_te).mean())           # headline EA is now CAUSAL
+
+    # EA accuracy vs number of unlabeled trials seen (cumulative, causal).
+    correct = (preds == y_te).astype(float)
+    seen = np.arange(1, len(y_te) + 1)
+    out["ea_vs_seen"] = {
+        "trials_seen": seen.tolist(),
+        "cumulative_acc": np.cumsum(correct).tolist(),   # divide by trials_seen for running acc
+    }
+
+    # Transductive EA (reference from ALL test trials) -- NOT causal, for contrast only.
+    aligned_trans, _ = align(sub_te)
+    out["ea_transductive"] = float(ea_dec.score(aligned_trans, y_te))
 
     # --- quick recalibration: add k labeled test trials, refit, score the rest ---
     for k in recal_sizes:
