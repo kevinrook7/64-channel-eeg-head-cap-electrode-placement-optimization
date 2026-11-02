@@ -154,3 +154,30 @@ def test_streaming_reference_is_causal():
     assert np.allclose(refs[10], refs2[10]), "a later trial changed an earlier reference"
     # But the last reference (sees all) does change.
     assert not np.allclose(refs[-1], refs2[-1])
+
+
+# ------------------------------------------------------ window-length sweep ---
+
+def test_crosses_precue_flags_pre_cue_windows():
+    """A 2.0 s window ending 1.5 s after the cue starts before the cue; a 2.0 s
+    window ending 2.0 s after does not."""
+    from online.causal_decoder import crosses_precue
+    sf, cue = 250.0, 0.5
+    assert crosses_precue(sf, win_len=2.0, latency=1.5, cue_offset=cue) is True
+    assert crosses_precue(sf, win_len=2.0, latency=2.0, cue_offset=cue) is False
+    assert crosses_precue(sf, win_len=0.5, latency=0.5, cue_offset=cue) is False
+
+
+def test_window_length_sweep_drops_precue_points():
+    """With drop_precue=True no returned latency crosses the pre-cue baseline."""
+    from online.causal_decoder import window_length_sweep, crosses_precue
+    sf, cue = 250.0, 0.5
+    rng = np.random.default_rng(0)
+    Xtr = rng.standard_normal((40, 5, 1200)); ytr = np.array([2, 3] * 20)
+    Xte = rng.standard_normal((40, 5, 1200)); yte = np.array([2, 3] * 20)
+    lats = [0.5, 1.0, 1.5, 2.0, 2.5]
+    out = window_length_sweep(Xtr, ytr, Xte, yte, sf, [0.5, 2.0], lats,
+                              cue_offset=cue, drop_precue=True)
+    for wl, (kept_lats, _) in out.items():
+        for lat in kept_lats:
+            assert not crosses_precue(sf, float(wl), lat, cue)
