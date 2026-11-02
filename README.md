@@ -67,13 +67,27 @@ Modules:
 
 ### Results
 
-> **Status: the 9-subject sweep has not been run yet on this machine.** The code,
-> tests, and plotting are complete and verified on synthetic data, but
-> `results/online_results.json` and `results/online_recalibration.png` are
-> produced by `online/run_online.py`, which needs MOABB/MNE and more memory than
-> the current host has free. **No Part 2 accuracy numbers are quoted until that run
-> exists** — this section will be filled with the real means (no-recal, EA,
-> recal@{5,10,20,40}, and decode latency in ms) from the committed JSON.
+Cross-subject means (9 subjects, 8 channels selected on session 1, left/right two-class, held-out session 2). The decision uses a **causal 2.0 s window ending 2.0 s after the cue**. Exact per-subject numbers are in `results/online_results.json`; the figure is `results/online_recalibration.png`.
+
+| condition | mean accuracy (n=9) |
+|---|---|
+| no recalibration (session-1 decoder as-is) | 0.728 |
+| **Euclidean alignment** (transfer, **0 labels**) | **0.750** |
+| quick recalibration, 5 labeled trials | 0.729 |
+| quick recalibration, 10 labeled trials | 0.735 |
+| quick recalibration, 20 labeled trials | 0.734 |
+| quick recalibration, 40 labeled trials | 0.748 |
+
+Decode latency: **0.055 ms per trial** — the trained decoder classifies a window far faster than real time, so latency is set by how much post-cue EEG you wait for, not by compute.
+
+**Findings:**
+
+- **Free unsupervised transfer matches a labeled warm-up.** Euclidean alignment (0.750) — which spends *no* labels, using only the shape of the unlabeled incoming stream — equals or beats quick recalibration at every budget tested, including 40 labeled trials (0.748). On this dataset a short labeled warm-up buys little that alignment does not already give for free.
+- **Earlier decisions are better.** Accuracy *falls* as the window ends later (8 selected channels: 0.74 at 1.5 s → 0.63 at 3.5 s), so the discriminative imagery is early in the trial. The 8 selected channels track all 22 closely across the whole latency curve.
+- **Online decoding is real-time.** 0.055 ms/decision.
+- **Same hard-subject split as Part 1.** Subjects 3/8/9 decode ~0.88–0.92; subjects 2/5/6 sit near chance (~0.53–0.59) and no method rescues them — consistent with the deep-model result that the limit is signal, not method.
+
+Honest limits: one dataset (BCI IV 2a), 9 subjects, two classes; a 2.0 s window means the latency sweep cannot report latencies below ~1.5 s (the window would not fit before the cue). The recalibration gain is small and within the across-subject spread, so "a short warm-up helps a little, alignment helps as much for free" is the honest reading, not a strong recalibration win.
 
 ### Reproduce Part 2
 
