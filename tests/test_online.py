@@ -181,3 +181,59 @@ def test_window_length_sweep_drops_precue_points():
     for wl, (kept_lats, _) in out.items():
         for lat in kept_lats:
             assert not crosses_precue(sf, float(wl), lat, cue)
+
+
+# ------------------------------------------------- Part 1 untouched by default ---
+
+def test_filter_defaults_to_noncausal_zero_phase():
+    """causal defaults to False so Part 1 keeps v1's zero-phase filter.
+
+    Guards the reviewer's concern that adding the online causal path must NOT
+    silently change the Part 1 offline baselines. We check the default on a real
+    MNE RawArray (cheap: synthetic, no download) by filtering the same raw three
+    ways and asserting default == causal=False != causal=True.
+    """
+    import mne
+    from preprocess import filter_and_flag
+
+    sfreq = 250.0
+    rng = np.random.default_rng(0)
+    # 22 EEG channels of broadband noise, 20 s -- enough for an 8-30 Hz FIR.
+    data = rng.standard_normal((22, int(sfreq * 20))) * 1e-5
+    ch_names = [f"EEG{i:02d}" for i in range(22)]
+    info = mne.create_info(ch_names, sfreq, ch_types="eeg")
+    # colin27_1005 montage needs standard names; use make_standard_montage positions
+    # by giving channels standard 10-05 names the montage knows.
+    std = mne.channels.make_standard_montage("colin27_1005").ch_names[:22]
+    info = mne.create_info(std, sfreq, ch_types="eeg")
+
+    def filtered(**kw):
+        raw = mne.io.RawArray(data.copy(), info, verbose=False)
+        with_, _ = filter_and_flag(raw, **kw)
+        return with_.get_data()
+
+    default = filtered()
+    noncausal = filtered(causal=False)
+    causal = filtered(causal=True)
+
+    # default IS the non-causal (zero-phase) path -> bit-identical to causal=False
+    assert np.allclose(default, noncausal), "default filter changed; Part 1 would move"
+    # and the causal path really is a different filter
+    assert not np.allclose(default, causal), "causal=True did not change the filter"
+
+
+def test_matched_set_scores_every_condition_on_identical_trials():
+    """At every k, no_recal/EA/recal/EA+recal are scored on the SAME fixed set."""
+    (ctr, ytr), (cte, yte) = _make_sessions(n=80)
+    out = recalibration_curve(ctr, ytr, cte, yte, channels=None,
+                              recal_sizes=[0, 10, 20, 40], seed=0)
+    # fixed scoring set starts after the largest k and has a consistent length
+    assert out["scored_from_trial"] == 40
+    assert out["scored_trials"] == len(yte) - 40
+    # every per-k list has one entry per size, all valid fractions
+    for key in ("recal", "recal_ea", "no_recal_matched", "ea_matched"):
+        assert len(out[key]) == 4
+        assert all(0.0 <= v <= 1.0 for v in out[key])
+    # no_recal / EA do not use labels, so their matched score is flat across k
+    assert len(set(round(v, 9) for v in out["no_recal_matched"])) == 1
+    assert len(set(round(v, 9) for v in out["ea_matched"])) == 1

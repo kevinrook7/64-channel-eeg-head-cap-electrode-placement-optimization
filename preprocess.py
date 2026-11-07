@@ -14,28 +14,40 @@ FLAT_STD = 1e-6   # volts: below 1 uV of 8-30 Hz activity means no real signal
 NOISY_Z = 5.0     # robust z above this means unusually loud (likely a bad contact)
 
 
-def epochs_from_raw(raw, events):
+def epochs_from_raw(raw, events, causal=False):
     """Shared by every dataset: montage, 8-30 Hz filter, bad-channel check, epochs.
 
     `events` must mark cue onset with code 2 (left) / 3 (right).
+    `causal` -> see filter_and_flag.
     """
-    raw_filtered, bad_channels = filter_and_flag(raw)
+    raw_filtered, bad_channels = filter_and_flag(raw, causal=causal)
     return make_epochs(raw_filtered, events, bad_channels)
 
 
-def filter_and_flag(raw):
+def filter_and_flag(raw, causal=False):
     """Attach the montage, band-pass 8-30 Hz, and flag flat or noisy EEG channels.
 
     One-sided on purpose: a channel that is merely quieter than the rest is kept.
     Low amplitude can be real signal (e.g. BNCI's C5 sits next to the reference
     and still correlates ~0.9 with C3); a loud channel usually means a bad contact.
     Uses no labels, so it can't leak class information.
+
+    `causal` picks the filter phase:
+      False (default) -> MNE's default phase='zero', a forward-backward FIR. Every
+             output sample depends on samples both before AND after it. This is
+             fine for the v1 offline, cue-locked decode (whole window is seen at
+             once) but it is NON-CAUSAL: an online decision at time t is shaped by
+             samples after t. Use it only for the offline baselines.
+      True  -> phase='minimum', a minimum-phase (causal) FIR. Output sample t
+             depends only on samples at or before t, so a windowed online decision
+             at time t truly uses only past data. Use it for the online sweeps.
     """
     montage = mne.channels.make_standard_montage("colin27_1005")
     raw.set_montage(montage)
     # raw.plot_sensors(show_names=True)
 
-    raw_filtered = raw.copy().filter(l_freq=8.0, h_freq=30.0)
+    phase = "minimum" if causal else "zero"
+    raw_filtered = raw.copy().filter(l_freq=8.0, h_freq=30.0, phase=phase)
 
     # Only EEG channels take part in the check (EOG / stim channels would skew it).
     eeg_names = [raw_filtered.ch_names[i] for i in mne.pick_types(raw_filtered.info, eeg=True)]

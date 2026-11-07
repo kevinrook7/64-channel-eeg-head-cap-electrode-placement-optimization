@@ -37,6 +37,8 @@ LATENCIES = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5]  # decision latencies for sweep 
 WIN_LENS = [0.5, 1.0, 1.5, 2.0]  # window lengths for the window-length sweep (A2)
 N_SELECT = 8           # channels to select on session 1 (v1's practical subset)
 SEED = 0
+CAUSAL = True          # online sweeps use a causal (phase='minimum') band-pass so
+                       # every windowed decision truly uses only past samples.
 
 
 def select_on_session1(covs_tr, y_tr, n_select, seed=SEED):
@@ -56,7 +58,7 @@ def run_subject(subject):
     from online.recalibration import recalibration_curve, window_covs_for
 
     mne.set_log_level("WARNING")
-    sess = prepare_bnci_sessions(subject)
+    sess = prepare_bnci_sessions(subject, causal=CAUSAL)
     sfreq = sess["T"].info["sfreq"]
     X_tr, y_tr = task_window(sess["T"]), sess["T"].events[:, 2]
     X_te, y_te = task_window(sess["E"]), sess["E"].events[:, 2]
@@ -104,10 +106,27 @@ def run_subject(subject):
 
     recal = recalibration_curve(covs_tr, y_tr, covs_te, y_te, channels=selected, seed=SEED)
 
+    # --- Pre-cue control (reviewer point 2): decode a 0.5 s window that ends at
+    # the cue, i.e. pure pre-cue rest. Uses the FULL epoch arrays (task_window
+    # crops to post-cue, so it can't reach rest). Must come out ~0.5 if nothing
+    # leaks backward; a clearly-above-chance number means contamination.
+    from online.causal_decoder import window_covariances
+    Xf_tr, Xf_te = sess["T"].get_data(), sess["E"].get_data()  # epoch starts tmin=-0.5
+    pre_bounds = window_bounds(sfreq, 0.5, [0.0], CUE_OFFSET)  # 0.5 s window ending AT cue
+    pctr = window_covariances(Xf_tr, pre_bounds)
+    pcte = window_covariances(Xf_te, pre_bounds)
+    precue_acc = None
+    if 0 in pctr and 0 in pcte:
+        from online.causal_decoder import fit_window_decoder, score_window
+        wdec = fit_window_decoder(pctr[0], y_tr, selected, SEED)
+        precue_acc = float(score_window(wdec, pcte[0], y_te, selected))
+
     return {
         "subject": subject,
         "n_channels": int(n_ch),
         "selected_channels": [sess["T"].ch_names[i] for i in selected],
+        "causal_filter": CAUSAL,
+        "precue_control_acc": precue_acc,
         "latency": {
             "latencies_s": lat_all[0].tolist(),
             "acc_all": lat_all[1].tolist(),

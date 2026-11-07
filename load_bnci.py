@@ -54,17 +54,21 @@ def prepare_bnci_epochs(subject, session="T"):
     return epochs_from_raw(raw, events)
 
 
-def prepare_bnci_sessions(subject):
+def prepare_bnci_sessions(subject, causal=False):
     """Both sessions with the SAME channel set, for cross-session use.
 
     Each session is checked separately; a channel flagged in either session is
     dropped from both, so a model trained on session T can be applied to E.
     The check uses no labels, so looking at session E here leaks nothing.
+
+    `causal` picks the band-pass phase (see preprocess.filter_and_flag). The
+    online sweeps pass causal=True so every window is a strictly past-only
+    decision; the v1 offline baselines keep the default zero-phase filter.
     """
     filtered, events, bads = {}, {}, set()
     for session in SESSIONS:
         raw, events[session] = load_session(subject, session)
-        filtered[session], session_bads = filter_and_flag(raw)
+        filtered[session], session_bads = filter_and_flag(raw, causal=causal)
         bads.update(session_bads)
     epochs = {s: make_epochs(filtered[s], events[s], sorted(bads)) for s in SESSIONS}
     assert epochs["T"].ch_names == epochs["E"].ch_names
