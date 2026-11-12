@@ -6,7 +6,8 @@ Five panels (2x3 grid, last cell blank):
   3 causal EA running accuracy vs unlabeled trials seen
   4 window-length sweep: accuracy vs latency for several window lengths (pre-cue
     windows dropped), which separates "more data" from "pre-cue contamination"
-  5 paired dot plot: causal EA minus no-recal per subject, with the Wilcoxon p
+  5 paired dot plot: causal EA minus no-recal per subject on the fixed held-out
+    set (same trials as panel 1), with the Wilcoxon p
 
 The JSON is a list of per-subject records, optionally followed by one trailing
 {"paired_stats_ea_vs_norecal": ...} record; subject records are the ones with a
@@ -119,18 +120,22 @@ def main():
     ax4.set_title(f"Window-length sweep (n={n})")
     ax4.legend(fontsize=8); ax4.set_ylim(0.45, 1.0)
 
-    # 5 --- paired dot plot: causal EA minus no-recal per subject ---
-    diffs = ea - no_recal
+    # 5 --- paired dot plot: causal EA minus no-recal per subject, on the SAME
+    #        fixed held-out set as panel 1 (matched columns are identical at every k).
+    from scipy.stats import wilcoxon
+    diffs = np.round(ea_matched[:, 0] - nr_matched[:, 0], 10)
     order = np.argsort(diffs)
     ax5.axhline(0, ls="-", color="0.6", lw=0.8)
-    ax5.scatter(range(n), diffs[order], color=["C2" if d > 0 else "C3" for d in diffs[order]], zorder=3)
+    colors = ["C2" if d > 0 else ("0.5" if d == 0 else "C3") for d in diffs[order]]
+    ax5.scatter(range(n), diffs[order], color=colors, zorder=3)
     ax5.set_xticks(range(n))
     ax5.set_xticklabels([results[i]["subject"] for i in order])
     ax5.set_xlabel("subject (sorted by effect)")
-    ax5.set_ylabel("causal EA − no-recal")
-    title = f"Paired effect per subject (n={n})"
-    if stats and stats.get("wilcoxon_p") is not None:
-        title += f"\nmean {stats['mean_diff']:+.3f}, {stats['n_improve']}/{stats['n']} up, Wilcoxon p={stats['wilcoxon_p']:.3f}"
+    ax5.set_ylabel("causal EA − no-recal (fixed held-out set)")
+    up, tie, down = int((diffs > 0).sum()), int((diffs == 0).sum()), int((diffs < 0).sum())
+    p = wilcoxon(diffs).pvalue
+    title = (f"Paired effect per subject, held-out trials (n={n})\n"
+             f"mean {diffs.mean():+.3f}, {up} up / {tie} tie / {down} down, Wilcoxon p={p:.3f}")
     ax5.set_title(title, fontsize=10)
 
     # 6 --- pre-cue control: decode a 0.5 s window of pure rest (must be ~chance) ---

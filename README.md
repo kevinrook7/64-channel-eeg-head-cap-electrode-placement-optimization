@@ -11,7 +11,7 @@ Two classes only. BCI IV 2a has four (left hand, right hand, feet, tongue); ever
 
 ## Headline result
 
-**TL;DR (n=9, causal, fixed held-out session-2 trials): free unsupervised Euclidean alignment reaches 0.757 vs 0.737 with no recalibration — above a 40-trial labeled warm-up (0.748), for zero labels. A small mean gain with mixed per-subject direction (p = 0.148): suggestive, not established.**
+**TL;DR (n=9, causal, fixed held-out session-2 trials): free unsupervised Euclidean alignment reaches 0.757 vs 0.737 with no recalibration — comparable to, and nominally higher than, a 40-trial labeled warm-up (0.748), for zero labels. A small mean gain with mixed per-subject direction (4 up / 2 tie / 3 down, p = 0.234): not established.**
 
 ![Accuracy vs recalibration trials and vs decision latency](results/online_recalibration.png)
 
@@ -83,9 +83,9 @@ Cross-subject means (9 subjects, 8 channels selected on session 1, left/right tw
 | quick recalibration, 40 labeled trials | 0.748 |
 | causal EA + recalibration, 40 labeled trials | 0.753 |
 
-(The full-stream causal-EA number, scored on all 144 trials for the latency/paired analyses, is 0.760; on the fixed 104-trial set it is 0.757. The two differ only by which trials are scored.)
+(The full-stream causal-EA number, scored on all 144 trials for the latency analyses, is 0.760; on the fixed 104-trial set it is 0.757. The two differ only by which trials are scored. The paired test below uses the fixed 104-trial set.)
 
-**The fair comparison is cleaner than the quick-look suggested:** on identical trials, label-free causal EA (0.757) beats quick recalibration at *every* budget tested, including 40 labeled trials (0.748). So "alignment can substitute for calibration trials" holds up when scored apples-to-apples — the labeled warm-up does not catch EA even at k=40.
+**On identical trials, label-free causal EA (0.757) is comparable to, and nominally higher than, quick recalibration at every budget tested,** including 40 labeled trials (0.748). By the time scoring starts at trial 41, EA has already seen 40 unlabeled trials. The margins are small and not significant, so the fair reading is that alignment can roughly stand in for a short labeled warm-up, not that it outperforms one.
 
 Decode latency: **0.6 ms per window, end to end** — covariance from the raw window samples, the channel-subset slice, CSP log-power, and the logistic-regression call. It excludes the one-off per-session band-pass filter (done once up front, not per window). Either way the decoder is far faster than real time, so latency is set by how much post-cue EEG you wait for, not by compute.
 
@@ -99,13 +99,13 @@ The 8–30 Hz band-pass is applied once per session with a **minimum-phase (caus
 
 **Findings:**
 
-- **Free, online, unsupervised transfer beats a labeled warm-up, by a small margin.** On the identical held-out set, causal Euclidean alignment reaches 0.757 with **zero labels**, above quick recalibration at every budget including 40 labeled trials (0.748) and above no-recalibration (0.737). But the per-subject effect is mixed: causal EA minus no-recal is **5 up, 1 tie, 3 down; Wilcoxon on the 8 non-tied subjects, mean +0.017, p = 0.148** — so the honest reading is "causal EA gives a small mean gain (0.737 → 0.757) with mixed per-subject direction, suggestive but not established at n = 9." It is not a proven win; it is evidence that alignment can stand in for a short labeled warm-up. Combining EA with a warm-up (causal EA + 40 trials, 0.753) adds nothing over EA alone.
+- **Free, online, unsupervised transfer is comparable to a labeled warm-up.** On the fixed held-out set (trials 41–144), causal Euclidean alignment reaches 0.757 with **zero labels**, nominally higher than quick recalibration at every budget including 40 labeled trials (0.748) and than no-recalibration (0.737). EA has seen 40 unlabeled trials by the time scoring starts. The per-subject effect is mixed: on the same held-out trials, causal EA minus no-recal is **4 up, 2 tie, 3 down; Wilcoxon on the 7 non-tied subjects, mean +0.020, p = 0.234** — so the honest reading is "causal EA gives a small mean gain (0.737 → 0.757) with mixed per-subject direction, not established at n = 9." It is not a proven win; it is evidence that alignment can roughly stand in for a short labeled warm-up. Combining EA with a warm-up (causal EA + 40 trials, 0.753) adds nothing over EA alone.
 - **Longer windows decode better; earlier decisions are still better — and this survives the causal filter.** The window-length sweep (0.5 / 1.0 / 1.5 / 2.0 s) shows a longer window beats a shorter one at every latency, and within any fixed window length accuracy falls as the window ends later. The cross-subject latency curve peaks at the earliest clean window (1.5 s, 0.743) and declines monotonically to 0.621 at 3.5 s. This was the reviewer's main worry: that the non-causal filter was faking the early advantage by smearing later imagery back into early windows. **It is not the filter** — the effect is the same under the causal filter — and it is **not leakage** — the pre-cue control is at chance. So the drop with latency is a real property of these trials (the discriminative imagery is early), with cue-locked visual/eye activity the one explanation the data here cannot separate from genuine early imagery. The 8 selected channels track all 22 closely across the latency curve.
 - **A short window at short latency can dip into pre-cue baseline.** With a 2.0 s window, a decision at 1.5 s latency would start 0.5 s *before* the cue and mix in resting EEG; the sweep drops such windows, so every plotted point is a clean post-cue decision.
-- **Online decoding is real-time.** 0.48 ms end-to-end per window.
+- **Online decoding is real-time.** 0.6 ms end-to-end per window.
 - **Same hard-subject split as Part 1.** Subjects 3/8/9 decode ~0.89–0.95; subjects 2/5/6 sit near chance (~0.51–0.59), and none of the methods tried rescues them — consistent with the deep-model result that the limit is signal, not method.
 
-Honest limits: one dataset (BCI IV 2a), 9 subjects, two classes. The EA gain over no-recalibration is consistent in direction but not significant at this sample size, and weaker under the causal filter than under zero-phase. **Causal EA's small edge does not come from the reference "locking in" over the stream.** Figure panel 3 plots the **rolling 20-trial difference** between causal EA and no-recalibration on the same trials: if the reference were stabilizing, that difference would rise as more unlabeled trials arrive. Instead it hovers just above zero (≈ +0.02) flat across the whole session — so EA runs a roughly constant small step ahead, and the earlier cumulative-accuracy "peak near trial 18" was trial difficulty, not the reference stabilizing. A 2.0 s window also cannot report latencies whose window would start before the cue (dropped in the sweep).
+Honest limits: one dataset (BCI IV 2a), 9 subjects, two classes. The EA gain over no-recalibration is small, mixed in direction across subjects, and not significant at this sample size, and weaker under the causal filter than under zero-phase. **Causal EA's small edge does not come from the reference "locking in" over the stream.** Figure panel 3 plots the **rolling 20-trial difference** between causal EA and no-recalibration on the same trials: if the reference were stabilizing, that difference would rise as more unlabeled trials arrive. Instead it hovers just above zero (≈ +0.02) flat across the whole session — so EA runs a roughly constant small step ahead, and the earlier cumulative-accuracy "peak near trial 18" was trial difficulty, not the reference stabilizing. A 2.0 s window also cannot report latencies whose window would start before the cue (dropped in the sweep).
 
 ### Non-causal vs causal (what the filter change cost)
 
@@ -113,11 +113,11 @@ The online sweeps originally used MNE's default zero-phase (non-causal) band-pas
 
 | metric | non-causal (zero-phase) | causal (minimum-phase) |
 |---|---|---|
-| no recalibration | 0.728 | 0.743 |
-| causal EA (headline, full stream) | 0.754 | 0.760 |
+| no recalibration (full stream) | 0.728 | 0.743 |
+| causal EA (full stream) | 0.754 | 0.760 |
 | accuracy at 1.5 s latency (earliest) | 0.744 | 0.743 |
 | accuracy at 3.5 s latency (latest) | 0.633 | 0.621 |
-| EA − no-recal, paired | 7 up / 1 tie / 1 down, +0.026, p = 0.078 | 5 up / 1 tie / 3 down, +0.017, p = 0.148 |
+| EA − no-recal, paired (full stream) | 7 up / 1 tie / 1 down, +0.026, p = 0.078 | 5 up / 1 tie / 3 down, +0.017, p = 0.148 |
 | pre-cue control | not run | 0.488 (chance, no leak) |
 
 The earliest-latency advantage (1.5 s > 3.5 s) is present under both filters, so it is a property of the data, not the filter. The full non-causal result set is archived at [`docs/online_results_noncausal.json`](docs/online_results_noncausal.json); the live `results/online_results.json` is the causal one.

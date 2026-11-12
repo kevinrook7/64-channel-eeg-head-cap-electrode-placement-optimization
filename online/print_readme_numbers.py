@@ -51,20 +51,38 @@ def main():
     print(f"# = trials {scored_from}..end ({scored} trials), identical across all conditions\n")
     print(f"{'condition':42s} mean acc (n={n})")
     print("-" * 60)
+    nr_m, ea_m, rec, rec_ea = col("no_recal_matched"), col("ea_matched"), col("recal"), col("recal_ea")
+    print(f"{'no recalibration':42s} {nr_m[0]:.3f}")
+    print(f"{'causal EA (running ref, 0 labels)':42s} {ea_m[0]:.3f}")
+    print(f"\n# full stream (all trials; latency analyses):")
     print(f"{'no recalibration':42s} {_mean(subs,'recalibration','no_recal'):.3f}")
     print(f"{'causal EA (running ref, 0 labels)':42s} {_mean(subs,'recalibration','ea'):.3f}")
     print(f"{'EA transductive (contrast only)':42s} {_mean(subs,'recalibration','ea_transductive'):.3f}")
-    nr_m, ea_m, rec, rec_ea = col("no_recal_matched"), col("ea_matched"), col("recal"), col("recal_ea")
+    print(f"\n# quick recalibration on the fixed held-out set:")
     for i, k in enumerate(sizes):
         print(f"{'  quick recalibration, k=%-3d' % k:42s} {rec[i]:.3f}   "
               f"(no-recal {nr_m[i]:.3f} | EA {ea_m[i]:.3f} | EA+recal {rec_ea[i]:.3f}, same trials)")
     print(f"\ndecode latency: {_mean(subs,'decode_ms_per_window_end_to_end'):.3f} ms/window end-to-end")
     print(f"pre-cue control: {_mean(subs,'recalibration','no_recal') and np.mean([r['precue_control_acc'] for r in subs]):.3f} (chance = no leak)")
 
+    # Paired test on the FIXED held-out set (the same trials as the table above).
+    # The matched columns are identical at every k (same trials, no labels), so k index 0.
+    from scipy.stats import wilcoxon
+    ea_s = np.array([r["recalibration"]["ea_matched"] for r in subs])
+    nr_s = np.array([r["recalibration"]["no_recal_matched"] for r in subs])
+    assert np.allclose(ea_s, ea_s[:, :1]) and np.allclose(nr_s, nr_s[:, :1]), \
+        "matched EA/no-recal differ across k -- check scoring"
+    md = np.round(ea_s[:, 0] - nr_s[:, 0], 10)
+    mup, mtie, mdown = int((md > 0).sum()), int((md == 0).sum()), int((md < 0).sum())
+    mp = wilcoxon(md).pvalue  # zero_method='wilcox' drops ties
+    print(f"\npaired causal EA − no-recal, fixed held-out set: {mup} up, {mtie} tie, {mdown} down; "
+          f"mean {md.mean():+.3f}, Wilcoxon on {len(md) - mtie} non-tied, p={mp:.3f}")
+    print("  per subject: " + ", ".join(f"S{r['subject']} {d:+.3f}" for r, d in zip(subs, md)))
+
     if stats:
         diffs = np.array(stats["per_subject_diff"])
         up = int((diffs > 0).sum()); tie = int((diffs == 0).sum()); down = int((diffs < 0).sum())
-        print(f"\npaired causal EA − no-recal: {up} up, {tie} tie, {down} down; "
+        print(f"paired causal EA − no-recal, full stream: {up} up, {tie} tie, {down} down; "
               f"mean {stats['mean_diff']:+.3f}, Wilcoxon on {stats['n'] - tie} non-tied, "
               f"p={stats['wilcoxon_p']:.3f}")
 
